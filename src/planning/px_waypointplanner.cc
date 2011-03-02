@@ -46,7 +46,8 @@ bool yawReached;						///< boolean for yaw attitude reached
 bool posReached;						///< boolean for position reached
 uint64_t timestamp_lastoutside_orbit = 0;///< timestamp when the MAV was last outside the orbit or had the wrong yaw value
 uint64_t timestamp_firstinside_orbit = 0;///< timestamp when the MAV was the first time after a waypoint change inside the orbit and had the correct yaw value
-//bool skip_next_setpoint = false;		 ///< Can be set to "true" by waypoint_handler to avoid sending outdated destination;
+uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay command was initiated
+
 mav_destination cur_dest;				 ///< current flight destination
 
 std::vector<mavlink_waypoint_t*> waypoints1;	///< vector1 that holds the waypoints
@@ -294,7 +295,7 @@ void set_destination(mavlink_waypoint_t* wp)
 }
 
 //float distanceToSegment(uint16_t seq, float x, float y, float z)
-float distanceToSegment(float x, float y, float z)
+float distanceToSegment(float x, float y, float z , uint16_t next_NAV_wp_id)
 {
     //if (seq < waypoints->size())
     //{
@@ -305,10 +306,10 @@ float distanceToSegment(float x, float y, float z)
         const PxVector3 C(x, y, z);
 
         // seq not the second last waypoint
-        /*
-        if ((uint16_t)(seq+1) < waypoints->size())
+
+        if ((uint16_t)(next_NAV_wp_id) < waypoints->size())
         {
-            mavlink_waypoint_t *next = waypoints->at(seq+1);
+            mavlink_waypoint_t *next = waypoints->at(next_NAV_wp_id);
             const PxVector3 B(next->x, next->y, next->z);
             const float r = (B-A).dot(C-A) / (B-A).lengthSquared();
             if (r >= 0 && r <= 1)
@@ -327,17 +328,18 @@ float distanceToSegment(float x, float y, float z)
         }
         else
         {
-        */
+
             return (C-A).length();
-        /*
+
         }
+        /*
     }
     else
     {
         if (verbose) printf("ERROR: index out of bounds\n");
     }
     return -1.f;
-    */
+        */
 }
 
 //float distanceToPoint(uint16_t seq, float x, float y, float z)
@@ -769,7 +771,6 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    	    else
 	    	    {
 	    	        timestamp_lastoutside_orbit = now;
-	    	        //set_destination(cur_wp,cur_dest);
 	    	    }
 	    	    break;
 	    }
@@ -788,7 +789,31 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    case MAV_CMD_NAV_LAST:
 	    	break;
 	    case MAV_CMD_CONDITION_DELAY:
+	    {
+	    	if (timestamp_delay_started == 0)
+	    	{
+	    		timestamp_delay_started = now;
+	    		if (verbose) printf("Delay initiated (%.2f sec)...\n", cur_wp->param1);
+	    		if (verbose && paramClient->getParamValue("HANDLEWAYPOINTDELAY")>cur_wp->param1)
+	    			{
+	    				printf("Warning: Delay shorter than HANDLEWAYPOINTDELAY parameter (%.2f sec)!\n", paramClient->getParamValue("HANDLEWAYPOINTDELAY"));
+	    			}
+	    	}
+	    	if (now - timestamp_delay_started >= cur_wp->param1*1000000 && cur_wp->autocontinue == true)
+	    	{
+	    		timestamp_delay_started = 0;
+	    		current_active_wp_id++;
+	    		if (verbose) printf("... delay finished. Proceed to next waypoint.\n");
+				cur_wp->current = false;
+				waypoints->at(current_active_wp_id)->current = true;
+				send_waypoint_current(current_active_wp_id);
+	    	}
+	    	else
+	    	{
+	    		if (verbose) printf("... %.2f sec left...\n", cur_wp->param1-(float)(now - timestamp_delay_started)/1000000.0);
+	    	}
 	    	break;
+	    }
 	    case MAV_CMD_CONDITION_CHANGE_ALT:
 	    	break;
 	    case MAV_CMD_CONDITION_DISTANCE:
@@ -936,11 +961,12 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
 
                     // compare current position (given in message) with current waypoint
                     float orbit = wp->param2;
-
                     float dist;
-                    if (wp->param1 == 0)
+                    uint16_t next_wp_id =  current_active_wp_id+1;
+                    if (wp->param1 == 0 && next_wp_id < waypoints->size() && waypoints->at(next_wp_id)->command == MAV_CMD_NAV_WAYPOINT)
                     {
-                        dist = distanceToSegment(pos.x, pos.y, pos.z);
+                    	//if (debug) printf("Next waypoint (%u) is MAV_CMD_NAV_WAYPOINT as well. Using distanceToSegment.\n", next_wp_id);
+                        dist = distanceToSegment(pos.x, pos.y, pos.z, next_wp_id);
                     }
                     else
                     {
@@ -1012,10 +1038,9 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     }
 
     // resend current destination every "SETPOINTDELAY" seconds
-    //if (verbose) printf("Send setpoint?\n");
     if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000)
     {
-    	if (verbose) printf("Send setpoint: x: %f | y: %f | z: %f\n", cur_dest.x, cur_dest.y, cur_dest.z);
+    	if (verbose) printf("Send setpoint: x: %.2f | y: %.2f | z: %.2f\n", cur_dest.x, cur_dest.y, cur_dest.z);
         send_setpoint();
     }
 

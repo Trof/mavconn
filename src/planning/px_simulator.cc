@@ -27,7 +27,7 @@ This file is part of the PIXHAWK project
  *   @brief
  *
  *   @author Samuel Zihlmann <samuezih@ee.ethz.ch>, Sebastian Wendland <wendlans@ee.ethz.ch>
- *
+ *   @author Alex Trofimov <talex@student.ethz.ch>
  */
 
 #include <cstdio>
@@ -170,8 +170,8 @@ void sendPosition(mavlink_local_position_t* pos, mavlink_attitude_t* att)
 void calcPosition(mavlink_local_position_t* nextpos, mavlink_attitude_t* nextatt)
 {
 	//P-controller gains
-	float K_p = 0.02;
-	float K_t = 0.02;
+	float K_p = 0.08;
+	float K_t = 0.08;
 
 	// velocity*dt
 	float d_x=0;
