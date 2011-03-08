@@ -36,6 +36,7 @@ typedef struct _mav_destination
 	float y; //local: y position, global: latitude
 	float z; //local: z position, global: altitude
 	float yaw; //Yaw orientation in degrees, [0..360] 0 = NORTH
+	float rad; //Radius in which the destination counts as reached
 } mav_destination;
 
 
@@ -157,7 +158,7 @@ void send_waypoint_current(uint16_t seq)
     }
     else
     {
-        if (verbose) printf("ERROR: index out of bounds\n");
+        if (verbose) printf("ERROR: index out of bounds 1\n");
     }
 }
 
@@ -233,10 +234,11 @@ void send_waypoint(uint8_t target_systemid, uint8_t target_compid, uint16_t seq)
     }
     else
     {
-        if (verbose) printf("ERROR: index out of bounds\n");
+        if (verbose) printf("ERROR: index out of bounds 2\n");
     }
 }
 
+/*
 void send_waypoint_request(uint8_t target_systemid, uint8_t target_compid, uint16_t seq)
 {
     if (seq < waypoints->size())
@@ -252,12 +254,35 @@ void send_waypoint_request(uint8_t target_systemid, uint8_t target_compid, uint1
 
         usleep(paramClient->getParamValue("PROTOCOLDELAY"));
     }
+
     else
     {
-        if (verbose) printf("ERROR: index out of bounds\n");
+        if (verbose) printf("ERROR: index out of bounds. seq = %u ,size = %u\n",seq,waypoints->size());
     }
 }
+*/
 
+void send_waypoint_request(uint8_t target_systemid, uint8_t target_compid, uint16_t seq)
+{
+    if (seq < protocol_current_count) //changed this from if(seq < waypoints->size())
+    {
+        mavlink_message_t msg;
+        mavlink_waypoint_request_t wpr;
+        wpr.target_system = target_systemid;
+        wpr.target_component = target_compid;
+        wpr.seq = seq;
+        mavlink_msg_waypoint_request_encode(systemid, compid, &msg, &wpr);
+        mavlink_message_t_publish(lcm, "MAVLINK", &msg);
+        if (verbose) printf("Sent waypoint request %u to ID %u\n", wpr.seq, wpr.target_system);
+
+        usleep(paramClient->getParamValue("PROTOCOLDELAY"));
+    }
+
+    else
+    {
+        if (verbose) printf("ERROR: index out of bounds. seq = %u ,size = %u\n",seq,waypoints->size());
+    }
+}
 void send_waypoint_reached(uint16_t seq)
 /*
 *  @brief emits a message that a waypoint reached
@@ -287,6 +312,7 @@ void set_destination(mavlink_waypoint_t* wp)
 	cur_dest.y = wp->y;
 	cur_dest.z = wp->z;
 	cur_dest.yaw = wp->param4;
+	cur_dest.rad = wp->param2;
 
 	if(wp->command != MAV_CMD_NAV_WAYPOINT)
 	{
@@ -368,6 +394,176 @@ float distanceToPoint(float x, float y, float z)
     return (C-A).length();
 }
 
+void handle_waypoint (uint16_t seq, uint64_t now)
+{
+	uint16_t old_active_wp_id = current_active_wp_id;
+
+	if (seq < waypoints->size())
+	{
+		mavlink_waypoint_t *cur_wp = waypoints->at(seq);
+
+	    switch(cur_wp->command)
+	    {
+	    case MAV_CMD_NAV_WAYPOINT:
+	    {
+	    	set_destination(cur_wp);
+	    		//check if the current waypoint was reached
+	    	    if ((posReached && /*yawReached &&*/ !idle))
+	    	    {
+    	            if (timestamp_firstinside_orbit == 0)
+    	            {
+    	                // Announce that last waypoint was reached
+    	                if (verbose) printf("*** Reached waypoint %u ***\n", cur_wp->seq);
+    	                send_waypoint_reached(cur_wp->seq);
+    	                timestamp_firstinside_orbit = now;
+    	            }
+
+    	            // check if the MAV was long enough inside the waypoint orbit
+    	            if(now-timestamp_firstinside_orbit >= cur_wp->param1*1000000)
+    	            {
+    	                if (cur_wp->autocontinue)
+    	                {
+    	                    cur_wp->current = false;
+    	                    if ((uint16_t)(seq + 1) < waypoints->size())
+    	                    {
+    	                    	current_active_wp_id = seq + 1;
+       	                    	// Proceed to next waypoint
+        	                    timestamp_firstinside_orbit = 0;
+        	                    send_waypoint_current(current_active_wp_id);
+        	                    waypoints->at(current_active_wp_id)->current = true;
+        	                    posReached = false;
+        	                    yawReached = false;
+        	                    if (verbose) printf("Set new waypoint (%u)\n", current_active_wp_id);
+    	                    }
+    	                    else
+    	                    	//the end of waypoint list is reached.
+    	                    {
+    	                    	if (verbose) printf("Reached the end of the list.\n");
+    	                    	/*
+    	                    	if (verbose) printf("Reached the end of the list. Going to idle mode.\n");
+    	                    	idle = true;
+    	                    	*/
+    	                    }
+    	                }
+    	            }
+
+	    	    }
+	    	    else
+	    	    {
+	    	        timestamp_lastoutside_orbit = now;
+	    	    }
+	    	    break;
+	    }
+	    case MAV_CMD_NAV_LOITER_UNLIM:
+	    	break;
+	    case MAV_CMD_NAV_LOITER_TURNS:
+	    	break;
+	    case MAV_CMD_NAV_LOITER_TIME:
+	    	break;
+	    case MAV_CMD_NAV_RETURN_TO_LAUNCH:
+	    	break;
+	    case MAV_CMD_NAV_LAND:
+	    	break;
+	    case MAV_CMD_NAV_TAKEOFF:
+	    	break;
+	    case MAV_CMD_NAV_LAST:
+	    	break;
+	    case MAV_CMD_CONDITION_DELAY:
+	    {
+	    	if (timestamp_delay_started == 0)
+	    	{
+	    		timestamp_delay_started = now;
+	    		if (verbose) printf("Delay initiated (%.2f sec)...\n", cur_wp->param1);
+	    		if (verbose && paramClient->getParamValue("HANDLEWAYPOINTDELAY")>cur_wp->param1)
+	    			{
+	    				printf("Warning: Delay shorter than HANDLEWAYPOINTDELAY parameter (%.2f sec)!\n", paramClient->getParamValue("HANDLEWAYPOINTDELAY"));
+	    			}
+	    	}
+	    	if (now - timestamp_delay_started >= cur_wp->param1*1000000 && cur_wp->autocontinue == true)
+	    	{
+	    		timestamp_delay_started = 0;
+	    		current_active_wp_id++;
+	    		if (verbose) printf("... delay finished. Proceed to next waypoint.\n");
+				cur_wp->current = false;
+				waypoints->at(current_active_wp_id)->current = true;
+				send_waypoint_current(current_active_wp_id);
+	    	}
+	    	else
+	    	{
+	    		if (verbose) printf("... %.2f sec left...\n", cur_wp->param1-(float)(now - timestamp_delay_started)/1000000.0);
+	    	}
+	    	break;
+	    }
+	    case MAV_CMD_CONDITION_CHANGE_ALT:
+	    	break;
+	    case MAV_CMD_CONDITION_DISTANCE:
+	    	break;
+	    case MAV_CMD_CONDITION_LAST:
+	    	break;
+	    case MAV_CMD_DO_SET_MODE:
+	    	break;
+	    case MAV_CMD_DO_JUMP:
+	    {
+			if (cur_wp->autocontinue)
+			{
+				if (cur_wp->param2 > 0)
+				{
+					cur_wp->param2 = cur_wp->param2 - 1;
+					if (verbose) printf("Jump from waypoint %u to waypoint %u. %u jumps left\n", current_active_wp_id, (uint32_t) cur_wp->param1, (uint32_t) cur_wp->param2);
+					current_active_wp_id = cur_wp->param1;
+				}
+				else
+				{
+					if ((uint16_t)(current_active_wp_id + 1) < waypoints->size())
+                    {
+                        current_active_wp_id++;
+                        if (verbose) printf("Jump command not performed: jump limit reached. Proceed to next waypoint\n");
+                    }
+					else
+					{
+						if (verbose) printf("Jump command not performed: jump limit reached. Terminal waypoint reached\n");
+					}
+				}
+				cur_wp->current = false;
+				waypoints->at(current_active_wp_id)->current = true;
+				send_waypoint_current(current_active_wp_id);
+			}
+			break;
+	    }
+	    case MAV_CMD_DO_CHANGE_SPEED:
+	    	break;
+	    case MAV_CMD_DO_SET_HOME:
+	    	break;
+	    case MAV_CMD_DO_SET_PARAMETER:
+	    	break;
+	    case MAV_CMD_DO_SET_RELAY:
+	    	break;
+	    case MAV_CMD_DO_REPEAT_RELAY:
+	    	break;
+	    case MAV_CMD_DO_SET_SERVO:
+	    	break;
+	    case MAV_CMD_DO_REPEAT_SERVO:
+	    {
+	    	break;
+	    }
+
+	    }
+	}
+
+	else
+	{
+		if (verbose) printf("Waypoint %u is out of bounds. Currently have %u waypoints.\n", seq, (uint16_t)waypoints->size());
+	}
+
+	if (current_active_wp_id != old_active_wp_id)
+	{
+		//Waypoint changed, execute next waypoint at once. Warning: recursion!!!
+		if (verbose) printf("Executing commands of the new waypoint(%u)...\n",current_active_wp_id);
+		handle_waypoint(current_active_wp_id,now);
+	}
+	timestamp_last_handle_waypoint = now;
+}
+
 static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 {
 	switch(msg->msgid)
@@ -425,6 +621,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                        yawReached = false;
 	                        posReached = false;
 	                        send_waypoint_current(current_active_wp_id);
+	                        handle_waypoint(current_active_wp_id,now);
 	                        send_setpoint();
 	                        timestamp_firstinside_orbit = 0;
 	                    }
@@ -586,6 +783,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            if((msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && (wp.target_system == systemid && wp.target_component == compid))
 	            {
 	                protocol_timestamp_lastaction = now;
+	                printf("Received WP % 3u%s: Frame: %u\tCommand: % 3u\tparam1: % 6.2f\tparam2: % 7.2f\tparam3: % 6.2f\tparam4: % 7.2f\tX: % 7.2f\tY: % 7.2f\tZ: % 7.2f\tAuto-Cont: %u\t\n", wp.seq, (wp.current?"*":" "), wp.frame, wp.command, wp.param1, wp.param2, wp.param3, wp.param4, wp.x, wp.y, wp.z, wp.autocontinue);
 
 	                //ensure that we are in the correct state and that the first waypoint has id 0 and the following waypoints have the correct ids
 	                if ((current_state == PX_WPP_GETLIST && wp.seq == 0) || (current_state == PX_WPP_GETLIST_GETWPS && wp.seq == protocol_current_wp_id && wp.seq < protocol_current_count))
@@ -627,6 +825,9 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                                yawReached = false;
 	                                posReached = false;
 	                                send_waypoint_current(current_active_wp_id);
+	                                if (verbose) printf("\n start handle. posreached = %u, x = %.2f\n", posReached,cur_dest.x);
+	                                handle_waypoint(current_active_wp_id,now);
+	                                if (verbose) printf("\n finish handle. posreached = %u, x = %.2f\n", posReached,cur_dest.x);
 	                                send_setpoint();
 	                                timestamp_firstinside_orbit = 0;
 	                                break;
@@ -717,172 +918,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	}
 }
 
-void handle_waypoint (uint16_t seq, uint64_t now)
-{
-	uint16_t old_active_wp_id = current_active_wp_id;
 
-	if (seq < waypoints->size())
-	{
-		mavlink_waypoint_t *cur_wp = waypoints->at(seq);
-
-	    switch(cur_wp->command)
-	    {
-	    case MAV_CMD_NAV_WAYPOINT:
-	    {
-	    	set_destination(cur_wp);
-	    		//check if the current waypoint was reached
-	    	    if ((posReached && /*yawReached &&*/ !idle))
-	    	    {
-    	            if (timestamp_firstinside_orbit == 0)
-    	            {
-    	                // Announce that last waypoint was reached
-    	                if (verbose) printf("*** Reached waypoint %u ***\n", cur_wp->seq);
-    	                send_waypoint_reached(cur_wp->seq);
-    	                timestamp_firstinside_orbit = now;
-    	            }
-
-    	            // check if the MAV was long enough inside the waypoint orbit
-    	            if(now-timestamp_firstinside_orbit >= cur_wp->param1*1000000)
-    	            {
-    	                if (cur_wp->autocontinue)
-    	                {
-    	                    cur_wp->current = false;
-    	                    if ((uint16_t)(seq + 1) < waypoints->size())
-    	                    {
-    	                    	current_active_wp_id = seq + 1;
-       	                    	// Proceed to next waypoint
-        	                    timestamp_firstinside_orbit = 0;
-        	                    send_waypoint_current(current_active_wp_id);
-        	                    waypoints->at(current_active_wp_id)->current = true;
-        	                    posReached = false;
-        	                    yawReached = false;
-        	                    if (verbose) printf("Set new waypoint (%u)\n", current_active_wp_id);
-    	                    }
-    	                    else
-    	                    	//the end of waypoint list is reached.
-    	                    {
-    	                    	if (verbose) printf("Reached the end of the list. Going to idle mode.\n");
-    	                    	idle = true;
-    	                    }
-    	                }
-    	            }
-
-	    	    }
-	    	    else
-	    	    {
-	    	        timestamp_lastoutside_orbit = now;
-	    	    }
-	    	    break;
-	    }
-	    case MAV_CMD_NAV_LOITER_UNLIM:
-	    	break;
-	    case MAV_CMD_NAV_LOITER_TURNS:
-	    	break;
-	    case MAV_CMD_NAV_LOITER_TIME:
-	    	break;
-	    case MAV_CMD_NAV_RETURN_TO_LAUNCH:
-	    	break;
-	    case MAV_CMD_NAV_LAND:
-	    	break;
-	    case MAV_CMD_NAV_TAKEOFF:
-	    	break;
-	    case MAV_CMD_NAV_LAST:
-	    	break;
-	    case MAV_CMD_CONDITION_DELAY:
-	    {
-	    	if (timestamp_delay_started == 0)
-	    	{
-	    		timestamp_delay_started = now;
-	    		if (verbose) printf("Delay initiated (%.2f sec)...\n", cur_wp->param1);
-	    		if (verbose && paramClient->getParamValue("HANDLEWAYPOINTDELAY")>cur_wp->param1)
-	    			{
-	    				printf("Warning: Delay shorter than HANDLEWAYPOINTDELAY parameter (%.2f sec)!\n", paramClient->getParamValue("HANDLEWAYPOINTDELAY"));
-	    			}
-	    	}
-	    	if (now - timestamp_delay_started >= cur_wp->param1*1000000 && cur_wp->autocontinue == true)
-	    	{
-	    		timestamp_delay_started = 0;
-	    		current_active_wp_id++;
-	    		if (verbose) printf("... delay finished. Proceed to next waypoint.\n");
-				cur_wp->current = false;
-				waypoints->at(current_active_wp_id)->current = true;
-				send_waypoint_current(current_active_wp_id);
-	    	}
-	    	else
-	    	{
-	    		if (verbose) printf("... %.2f sec left...\n", cur_wp->param1-(float)(now - timestamp_delay_started)/1000000.0);
-	    	}
-	    	break;
-	    }
-	    case MAV_CMD_CONDITION_CHANGE_ALT:
-	    	break;
-	    case MAV_CMD_CONDITION_DISTANCE:
-	    	break;
-	    case MAV_CMD_CONDITION_LAST:
-	    	break;
-	    case MAV_CMD_DO_SET_MODE:
-	    	break;
-	    case MAV_CMD_DO_JUMP:
-	    {
-			if (cur_wp->autocontinue)
-			{
-				if (cur_wp->param2 > 0)
-				{
-					cur_wp->param2 = cur_wp->param2 - 1;
-					if (verbose) printf("Jump from waypoint %u to waypoint %u. %u jumps left\n", current_active_wp_id, (uint32_t) cur_wp->param1, (uint32_t) cur_wp->param2);
-					current_active_wp_id = cur_wp->param1;
-				}
-				else
-				{
-					if ((uint16_t)(current_active_wp_id + 1) < waypoints->size())
-                    {
-                        current_active_wp_id++;
-                        if (verbose) printf("Jump command not performed: jump limit reached. Proceed to next waypoint\n");
-                    }
-					else
-					{
-						if (verbose) printf("Jump command not performed: jump limit reached. Terminal waypoint reached\n");
-					}
-				}
-				cur_wp->current = false;
-				waypoints->at(current_active_wp_id)->current = true;
-				send_waypoint_current(current_active_wp_id);
-			}
-			break;
-	    }
-	    case MAV_CMD_DO_CHANGE_SPEED:
-	    	break;
-	    case MAV_CMD_DO_SET_HOME:
-	    	break;
-	    case MAV_CMD_DO_SET_PARAMETER:
-	    	break;
-	    case MAV_CMD_DO_SET_RELAY:
-	    	break;
-	    case MAV_CMD_DO_REPEAT_RELAY:
-	    	break;
-	    case MAV_CMD_DO_SET_SERVO:
-	    	break;
-	    case MAV_CMD_DO_REPEAT_SERVO:
-	    {
-	    	break;
-	    }
-
-	    }
-	}
-
-	else
-	{
-		if (verbose) printf("Waypoint %u is out of bounds. Currently have %u waypoints.\n", seq, (uint16_t)waypoints->size());
-	}
-
-	if (current_active_wp_id != old_active_wp_id)
-	{
-		//Waypoint changed, execute next waypoint at once. Warning: recursion!!!
-		if (verbose) printf("Executing commands of the new waypoint(%u)...\n",current_active_wp_id);
-		handle_waypoint(current_active_wp_id,now);
-	}
-	timestamp_last_handle_waypoint = now;
-}
 
 static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, const mavlink_message_t* msg, void * user)
 {
@@ -947,11 +983,9 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
 
     case MAVLINK_MSG_ID_LOCAL_POSITION:
         {
-            if(msg->sysid == systemid && current_active_wp_id < waypoints->size())
+            if(msg->sysid == systemid)
             {
-                mavlink_waypoint_t *wp = waypoints->at(current_active_wp_id);
-
-                if(wp->frame == 1)
+                if(cur_dest.frame == 1)
                 {
                     mavlink_local_position_t pos;
                     mavlink_msg_local_position_decode(msg, &pos);
@@ -959,13 +993,12 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
 
                     posReached = false;
 
-                    // compare current position (given in message) with current waypoint
-                    float orbit = wp->param2;
+                    // compare current position (given in message) with current destination
                     float dist;
                     uint16_t next_wp_id =  current_active_wp_id+1;
-                    if (wp->param1 == 0 && next_wp_id < waypoints->size() && waypoints->at(next_wp_id)->command == MAV_CMD_NAV_WAYPOINT)
+                    if ( waypoints->at(current_active_wp_id)->param1 == 0 && next_wp_id < waypoints->size() && waypoints->at(current_active_wp_id)->command == MAV_CMD_NAV_WAYPOINT && waypoints->at(next_wp_id)->command == MAV_CMD_NAV_WAYPOINT)
                     {
-                    	//if (debug) printf("Next waypoint (%u) is MAV_CMD_NAV_WAYPOINT as well. Using distanceToSegment.\n", next_wp_id);
+                    	//if (debug) printf("Both current and next waypoint (%u) are MAV_CMD_NAV_WAYPOINT. Using distanceToSegment.\n", next_wp_id);
                         dist = distanceToSegment(pos.x, pos.y, pos.z, next_wp_id);
                     }
                     else
@@ -973,7 +1006,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
                         dist = distanceToPoint(pos.x, pos.y, pos.z);
                     }
 
-                    if (dist >= 0.f && dist <= orbit && yawReached)
+                    if (dist >= 0.f && dist <= cur_dest.rad && yawReached)
                     {
                         posReached = true;
                     }
@@ -1083,7 +1116,7 @@ int main(int argc, char* argv[])
     paramClient = new PxParamClient(systemid, compid, lcm, configFile, verbose);
     paramClient->setParamValue("POSFILTER", 1.f);
     paramClient->setParamValue("SETPOINTDELAY", 1.0);
-    paramClient->setParamValue("HANDLEWAYPOINTDELAY",1.0);
+    paramClient->setParamValue("HANDLEWAYPOINTDELAY",0.1);
     paramClient->setParamValue("PROTOCOLDELAY",40);	 //Attention: microseconds!!
     paramClient->setParamValue("PROTOCOLTIMEOUT", 2.0);
     paramClient->setParamValue("YAWTOLERANCE", 0.1745f);
@@ -1177,6 +1210,7 @@ int main(int argc, char* argv[])
     	cur_dest.y = 0; //local: y position, global: latitude
     	cur_dest.z = 0; //local: z position, global: altitude
     	cur_dest.yaw = 0; //Yaw orientation in degrees, [0..360] 0 = NORTH
+    	cur_dest.rad = 0;
 
         //get the new current waypoint
         struct timeval tv;

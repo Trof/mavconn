@@ -146,7 +146,7 @@ void* lcm_wait(void* lcm_ptr)
  */
 void sendPosition(mavlink_local_position_t* pos, mavlink_attitude_t* att)
 {
-	printf("Send Position: x: %f, y: %f, z: %f\n",pos->x,pos->y,pos->z);
+	printf("Send Position: x: %.4f, y: %.4f, z: %.4f yaw: %.4f\n",pos->x,pos->y,pos->z,att->yaw);
 
 	mavlink_message_t msg;
 
@@ -169,9 +169,12 @@ void sendPosition(mavlink_local_position_t* pos, mavlink_attitude_t* att)
  */
 void calcPosition(mavlink_local_position_t* nextpos, mavlink_attitude_t* nextatt)
 {
+	/* P-controller
+
+
 	//P-controller gains
-	float K_p = 0.08;
-	float K_t = 0.08;
+	float K_p = 0.05;
+	float K_t = 0.05;
 
 	// velocity*dt
 	float d_x=0;
@@ -188,7 +191,46 @@ void calcPosition(mavlink_local_position_t* nextpos, mavlink_attitude_t* nextatt
 	nextpos->y = currentpos.y + d_y;
 	nextpos->z = currentpos.z + d_z;
 	nextatt->yaw = currentatt.yaw + d_theta;
+*/
+	//Constant speed
 
+	//movement and rotation speed
+	float v = 0.05; //
+	float phi = 0.05; //
+
+	// direction unit vector
+	float d_x=0;
+	float d_y=0;
+	float d_z=1;
+
+	float mag = sqrt((cur_dest.x - currentpos.x)*(cur_dest.x - currentpos.x) + (cur_dest.y - currentpos.y)*(cur_dest.y - currentpos.y) + (cur_dest.z - currentpos.z)*(cur_dest.z - currentpos.z));
+	if (mag > v)
+	{
+		d_x = v*(cur_dest.x - currentpos.x)/mag;
+		d_y = v*(cur_dest.y - currentpos.y)/mag;
+		d_z = v*(cur_dest.z - currentpos.z)/mag;
+
+		nextpos->x = currentpos.x + d_x;
+		nextpos->y = currentpos.y + d_y;
+		nextpos->z = currentpos.z + d_z;
+
+	}
+	else
+	{
+		nextpos->x = cur_dest.x;
+		nextpos->y = cur_dest.y;
+		nextpos->z = cur_dest.z;
+	}
+
+	if (abs (cur_dest.yaw - currentatt.yaw) > phi)
+	{
+		float sign_rotation =(cur_dest.yaw - currentatt.yaw)/abs (cur_dest.yaw - currentatt.yaw);
+		nextatt->yaw = currentatt.yaw + phi*sign_rotation;
+	}
+	else
+	{
+		nextatt->yaw = cur_dest.yaw;
+	}
 
 }
 
