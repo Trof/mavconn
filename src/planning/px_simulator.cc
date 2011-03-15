@@ -111,6 +111,7 @@ mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel,
 		//printf("Received attitude message, transport took %d us\n", (receiveTime - sendTime));
 		mavlink_msg_attitude_decode(msg, &currentatt);
 		//printf("ATT: yaw: %f\n", currentatt.yaw);
+		currentatt.yaw = currentatt.yaw*180/M_PI;
 		break;
 
 	case MAVLINK_MSG_ID_LOCAL_POSITION_SETPOINT_SET:
@@ -120,6 +121,7 @@ mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel,
 		cur_dest.y = sp.y;
 		cur_dest.z = sp.z;
 		cur_dest.yaw = sp.yaw;
+		//cur_dest.yaw = cur_dest.yaw*180/M_PI;
 		break;
 	default:
 		printf("ERROR: could not decode message with ID: %d\n", msg->msgid);
@@ -196,19 +198,14 @@ void calcPosition(mavlink_local_position_t* nextpos, mavlink_attitude_t* nextatt
 
 	//movement and rotation speed
 	float v = 0.05; //
-	float phi = 0.05; //
-
-	// direction unit vector
-	float d_x=0;
-	float d_y=0;
-	float d_z=1;
+	float phi = 1; //
 
 	float mag = sqrt((cur_dest.x - currentpos.x)*(cur_dest.x - currentpos.x) + (cur_dest.y - currentpos.y)*(cur_dest.y - currentpos.y) + (cur_dest.z - currentpos.z)*(cur_dest.z - currentpos.z));
 	if (mag > v)
 	{
-		d_x = v*(cur_dest.x - currentpos.x)/mag;
-		d_y = v*(cur_dest.y - currentpos.y)/mag;
-		d_z = v*(cur_dest.z - currentpos.z)/mag;
+		float d_x = v*(cur_dest.x - currentpos.x)/mag;
+		float d_y = v*(cur_dest.y - currentpos.y)/mag;
+		float d_z = v*(cur_dest.z - currentpos.z)/mag;
 
 		nextpos->x = currentpos.x + d_x;
 		nextpos->y = currentpos.y + d_y;
@@ -222,6 +219,9 @@ void calcPosition(mavlink_local_position_t* nextpos, mavlink_attitude_t* nextatt
 		nextpos->z = cur_dest.z;
 	}
 
+
+
+	printf("cur_dest.yaw = %.4f; currentatt.yaw = %.4f; ", cur_dest.yaw ,currentatt.yaw);
 	if (abs (cur_dest.yaw - currentatt.yaw) > phi)
 	{
 		float sign_rotation =(cur_dest.yaw - currentatt.yaw)/abs (cur_dest.yaw - currentatt.yaw);
@@ -231,7 +231,8 @@ void calcPosition(mavlink_local_position_t* nextpos, mavlink_attitude_t* nextatt
 	{
 		nextatt->yaw = cur_dest.yaw;
 	}
-
+	printf("nextatt->yaw = %.4f\n",nextatt->yaw);
+	nextatt->yaw = nextatt->yaw*M_PI/180.0;
 }
 
 /** @brief initialize and run simulation
@@ -243,7 +244,7 @@ int main (int argc, char ** argv)
 	//initialize variables
 	currentpos.x=0; currentpos.y=0; currentpos.z=-0.5;
 	currentpos.vx=0; currentpos.vy=0; currentpos.vz=0;
-	currentatt.pitch=0; currentatt.roll=0; currentatt.yaw=0;
+	currentatt.pitch=0; currentatt.roll=0; currentatt.yaw=30;
 	currentatt.pitchspeed=0; currentatt.rollspeed=0; currentatt.yawspeed=0;
 
 	cur_dest.frame = 1; ///< The coordinate system of the waypoint. see MAV_FRAME in mavlink_types.h

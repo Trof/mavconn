@@ -238,30 +238,6 @@ void send_waypoint(uint8_t target_systemid, uint8_t target_compid, uint16_t seq)
     }
 }
 
-/*
-void send_waypoint_request(uint8_t target_systemid, uint8_t target_compid, uint16_t seq)
-{
-    if (seq < waypoints->size())
-    {
-        mavlink_message_t msg;
-        mavlink_waypoint_request_t wpr;
-        wpr.target_system = target_systemid;
-        wpr.target_component = target_compid;
-        wpr.seq = seq;
-        mavlink_msg_waypoint_request_encode(systemid, compid, &msg, &wpr);
-        mavlink_message_t_publish(lcm, "MAVLINK", &msg);
-        if (verbose) printf("Sent waypoint request %u to ID %u\n", wpr.seq, wpr.target_system);
-
-        usleep(paramClient->getParamValue("PROTOCOLDELAY"));
-    }
-
-    else
-    {
-        if (verbose) printf("ERROR: index out of bounds. seq = %u ,size = %u\n",seq,waypoints->size());
-    }
-}
-*/
-
 void send_waypoint_request(uint8_t target_systemid, uint8_t target_compid, uint16_t seq)
 {
     if (seq < protocol_current_count) //changed this from if(seq < waypoints->size())
@@ -396,6 +372,7 @@ float distanceToPoint(float x, float y, float z)
 
 void handle_waypoint (uint16_t seq, uint64_t now)
 {
+	//if (debug) printf("Started executing waypoint(%u)...\n",seq);
 	uint16_t old_active_wp_id = current_active_wp_id;
 
 	if (seq < waypoints->size())
@@ -562,6 +539,7 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 		handle_waypoint(current_active_wp_id,now);
 	}
 	timestamp_last_handle_waypoint = now;
+	//if (debug) printf("Finished executing waypoint(%u)...\n",seq);
 }
 
 static void handle_communication (const mavlink_message_t* msg, uint64_t now)
@@ -618,9 +596,9 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                            }
 	                        }
 	                        if (verbose) printf("New current waypoint %u\n", current_active_wp_id);
+	                        send_waypoint_current(current_active_wp_id);
 	                        yawReached = false;
 	                        posReached = false;
-	                        send_waypoint_current(current_active_wp_id);
 	                        handle_waypoint(current_active_wp_id,now);
 	                        send_setpoint();
 	                        timestamp_firstinside_orbit = 0;
@@ -950,10 +928,9 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     {
     case MAVLINK_MSG_ID_ATTITUDE:
         {
-            if(msg->sysid == systemid && current_active_wp_id < waypoints->size())
+            if(msg->sysid == systemid)
             {
-                mavlink_waypoint_t *wp = waypoints->at(current_active_wp_id);
-                if(wp->frame == 1)
+                if(cur_dest.frame == 1)
                 {
                     mavlink_attitude_t att;
                     mavlink_msg_attitude_decode(msg, &att);
@@ -961,19 +938,19 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
                     //compare current yaw
                     if (att.yaw - yaw_tolerance >= 0.0f && att.yaw + yaw_tolerance < 2.f*M_PI)
                     {
-                        if (att.yaw - yaw_tolerance <= wp->param4 && att.yaw + yaw_tolerance >= wp->param4)
+                        if (att.yaw - yaw_tolerance <= cur_dest.yaw*M_PI/180 && att.yaw + yaw_tolerance >= cur_dest.yaw*M_PI/180)
                             yawReached = true;
                     }
                     else if(att.yaw - yaw_tolerance < 0.0f)
                     {
-                        float lowerBound = 360.0f + att.yaw - yaw_tolerance;
-                        if (lowerBound < wp->param4 || wp->param4 < att.yaw + yaw_tolerance)
+                        float lowerBound = 2.f*M_PI + att.yaw - yaw_tolerance;
+                        if (lowerBound < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < att.yaw + yaw_tolerance)
                             yawReached = true;
                     }
                     else
                     {
                         float upperBound = att.yaw + yaw_tolerance - 2.f*M_PI;
-                        if (att.yaw - yaw_tolerance < wp->param4 || wp->param4 < upperBound)
+                        if (att.yaw - yaw_tolerance < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < upperBound)
                             yawReached = true;
                     }
                 }
@@ -1073,7 +1050,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     // resend current destination every "SETPOINTDELAY" seconds
     if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000)
     {
-    	if (verbose) printf("Send setpoint: x: %.2f | y: %.2f | z: %.2f\n", cur_dest.x, cur_dest.y, cur_dest.z);
+    	if (verbose) printf("Send setpoint: x: %.2f | y: %.2f | z: %.2f yaw: %.f\n", cur_dest.x, cur_dest.y, cur_dest.z, cur_dest.yaw);
         send_setpoint();
     }
 
