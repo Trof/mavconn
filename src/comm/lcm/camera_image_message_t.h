@@ -22,6 +22,10 @@ struct _camera_image_message_t
     int64_t    utime;
     char*      camera_name;
     float      camera_params[4];
+    int32_t    roi_x;
+    int32_t    roi_y;
+    int32_t    roi_width;
+    int32_t    roi_height;
     int64_t    jpeg_size;
     int8_t     *jpeg_image_data;
     double     camera_pose[6];

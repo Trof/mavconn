@@ -29,6 +29,7 @@ This file is part of the MAVCONN project
 ========================================================================*/
 
 #include "LcmInput.h"
+#include <opencv2/core/core_c.h>
 #include <sys/time.h> // remove this
 
 namespace MAVCONN

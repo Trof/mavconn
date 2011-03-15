@@ -22,6 +22,10 @@ struct _rgbd_camera_image_message_t
     int64_t    utime;
     char*      camera_name;
     float      camera_params[4];
+    int32_t    roi_x;
+    int32_t    roi_y;
+    int32_t    roi_width;
+    int32_t    roi_height;
     int16_t    image_width;
     int16_t    image_height;
     int64_t    rgb_data_length;

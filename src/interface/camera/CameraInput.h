@@ -32,7 +32,7 @@ This file is part of the MAVCONN project
 #define _CameraInput_H__
 
 #include "CameraOperations.h"
-#include <highgui.h>
+#include <opencv2/highgui/highgui.hpp>
 
 namespace MAVCONN
 {

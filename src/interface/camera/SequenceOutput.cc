@@ -29,7 +29,7 @@ This file is part of the MAVCONN project
 ========================================================================*/
 
 #include "SequenceOutput.h"
-#include <highgui.h>
+#include <opencv2/highgui/highgui.hpp>
 #include <ctime>
 #include <algorithm>
 #include <boost/filesystem.hpp>

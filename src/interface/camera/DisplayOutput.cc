@@ -32,8 +32,8 @@ This file is part of the MAVCONN project
 #include "FrameOutput.h"
 #include "SequenceOutput.h"
 #include "VideoOutput.h"
-#include <highgui.h>
-
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc_c.h>
 
 #define CAPTURED_FRAME_WIDTH 640 // ((65536 - 4 - 4) / 3) // 752 // 100
 #define CAPTURED_FRAME_HEIGHT 480 // 1 // 480 // 64

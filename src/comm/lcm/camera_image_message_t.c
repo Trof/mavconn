@@ -20,10 +20,14 @@ int64_t __camera_image_message_t_hash_recursive(const __lcm_hash_ptr *p)
     const __lcm_hash_ptr cp = { p, (void*)__camera_image_message_t_get_hash };
     (void) cp;
  
-    int64_t hash = 0xdf1aa2d29213c8c0LL
+    int64_t hash = 0xf40271297305da40LL
          + __int64_t_hash_recursive(&cp)
          + __string_hash_recursive(&cp)
          + __float_hash_recursive(&cp)
+         + __int32_t_hash_recursive(&cp)
+         + __int32_t_hash_recursive(&cp)
+         + __int32_t_hash_recursive(&cp)
+         + __int32_t_hash_recursive(&cp)
          + __int64_t_hash_recursive(&cp)
          + __int8_t_hash_recursive(&cp)
          + __double_hash_recursive(&cp)
@@ -55,6 +59,18 @@ int __camera_image_message_t_encode_array(void *buf, int offset, int maxlen, con
         if (thislen < 0) return thislen; else pos += thislen;
  
         thislen = __float_encode_array(buf, offset + pos, maxlen - pos, p[element].camera_params, 4);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __int32_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].roi_x), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __int32_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].roi_y), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __int32_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].roi_width), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __int32_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].roi_height), 1);
         if (thislen < 0) return thislen; else pos += thislen;
  
         thislen = __int64_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].jpeg_size), 1);
@@ -95,6 +111,14 @@ int __camera_image_message_t_encoded_array_size(const camera_image_message_t *p,
  
         size += __float_encoded_array_size(p[element].camera_params, 4);
  
+        size += __int32_t_encoded_array_size(&(p[element].roi_x), 1);
+ 
+        size += __int32_t_encoded_array_size(&(p[element].roi_y), 1);
+ 
+        size += __int32_t_encoded_array_size(&(p[element].roi_width), 1);
+ 
+        size += __int32_t_encoded_array_size(&(p[element].roi_height), 1);
+ 
         size += __int64_t_encoded_array_size(&(p[element].jpeg_size), 1);
  
         size += __int8_t_encoded_array_size(p[element].jpeg_image_data, p[element].jpeg_size);
@@ -125,6 +149,18 @@ int __camera_image_message_t_decode_array(const void *buf, int offset, int maxle
         thislen = __float_decode_array(buf, offset + pos, maxlen - pos, p[element].camera_params, 4);
         if (thislen < 0) return thislen; else pos += thislen;
  
+        thislen = __int32_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].roi_x), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __int32_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].roi_y), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __int32_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].roi_width), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __int32_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].roi_height), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
         thislen = __int64_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].jpeg_size), 1);
         if (thislen < 0) return thislen; else pos += thislen;
  
@@ -149,6 +185,14 @@ int __camera_image_message_t_decode_array_cleanup(camera_image_message_t *p, int
         __string_decode_array_cleanup(&(p[element].camera_name), 1);
  
         __float_decode_array_cleanup(p[element].camera_params, 4);
+ 
+        __int32_t_decode_array_cleanup(&(p[element].roi_x), 1);
+ 
+        __int32_t_decode_array_cleanup(&(p[element].roi_y), 1);
+ 
+        __int32_t_decode_array_cleanup(&(p[element].roi_width), 1);
+ 
+        __int32_t_decode_array_cleanup(&(p[element].roi_height), 1);
  
         __int64_t_decode_array_cleanup(&(p[element].jpeg_size), 1);
  
@@ -192,6 +236,14 @@ int __camera_image_message_t_clone_array(const camera_image_message_t *p, camera
         __string_clone_array(&(p[element].camera_name), &(q[element].camera_name), 1);
  
         __float_clone_array(p[element].camera_params, q[element].camera_params, 4);
+ 
+        __int32_t_clone_array(&(p[element].roi_x), &(q[element].roi_x), 1);
+ 
+        __int32_t_clone_array(&(p[element].roi_y), &(q[element].roi_y), 1);
+ 
+        __int32_t_clone_array(&(p[element].roi_width), &(q[element].roi_width), 1);
+ 
+        __int32_t_clone_array(&(p[element].roi_height), &(q[element].roi_height), 1);
  
         __int64_t_clone_array(&(p[element].jpeg_size), &(q[element].jpeg_size), 1);
  

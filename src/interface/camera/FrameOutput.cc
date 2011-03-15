@@ -29,7 +29,7 @@ This file is part of the MAVCONN project
 ========================================================================*/
 
 #include "FrameOutput.h"
-#include <highgui.h>
+#include <opencv2/highgui/highgui.hpp>
 #include <ctime>
 
 namespace MAVCONN

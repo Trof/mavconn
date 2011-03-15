@@ -35,7 +35,7 @@ This file is part of the MAVCONN project
 #include <map>
 #include <vector>
 #include <sstream>
-#include <highgui.h>
+#include <opencv2/highgui/highgui.hpp>
 
 #include "timer/Timer.h"
 

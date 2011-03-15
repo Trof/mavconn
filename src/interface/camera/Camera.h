@@ -31,7 +31,7 @@ This file is part of the MAVCONN project
 #ifndef _Camera_H__
 #define _Camera_H__
 
-#include <cv.h>
+#include <opencv2/core/core.hpp>
 #include <iostream>
 #include <list>
 #include <vector>

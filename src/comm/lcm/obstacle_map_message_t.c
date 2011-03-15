@@ -20,7 +20,8 @@ int64_t __obstacle_map_message_t_hash_recursive(const __lcm_hash_ptr *p)
     const __lcm_hash_ptr cp = { p, (void*)__obstacle_map_message_t_get_hash };
     (void) cp;
  
-    int64_t hash = 0xd7e792ab42044963LL
+    int64_t hash = 0x6dcd511a97c200f6LL
+         + __int64_t_hash_recursive(&cp)
          + __int8_t_hash_recursive(&cp)
          + __float_hash_recursive(&cp)
          + __int32_t_hash_recursive(&cp)
@@ -51,6 +52,9 @@ int __obstacle_map_message_t_encode_array(void *buf, int offset, int maxlen, con
     int pos = 0, thislen, element;
  
     for (element = 0; element < elements; element++) {
+ 
+        thislen = __int64_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].utime), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
  
         thislen = __int8_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].type), 1);
         if (thislen < 0) return thislen; else pos += thislen;
@@ -105,6 +109,8 @@ int __obstacle_map_message_t_encoded_array_size(const obstacle_map_message_t *p,
     int size = 0, element;
     for (element = 0; element < elements; element++) {
  
+        size += __int64_t_encoded_array_size(&(p[element].utime), 1);
+ 
         size += __int8_t_encoded_array_size(&(p[element].type), 1);
  
         size += __float_encoded_array_size(&(p[element].resolution), 1);
@@ -139,6 +145,9 @@ int __obstacle_map_message_t_decode_array(const void *buf, int offset, int maxle
     int pos = 0, thislen, element;
  
     for (element = 0; element < elements; element++) {
+ 
+        thislen = __int64_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].utime), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
  
         thislen = __int8_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].type), 1);
         if (thislen < 0) return thislen; else pos += thislen;
@@ -179,6 +188,8 @@ int __obstacle_map_message_t_decode_array_cleanup(obstacle_map_message_t *p, int
 {
     int element;
     for (element = 0; element < elements; element++) {
+ 
+        __int64_t_decode_array_cleanup(&(p[element].utime), 1);
  
         __int8_t_decode_array_cleanup(&(p[element].type), 1);
  
@@ -230,6 +241,8 @@ int __obstacle_map_message_t_clone_array(const obstacle_map_message_t *p, obstac
 {
     int element;
     for (element = 0; element < elements; element++) {
+ 
+        __int64_t_clone_array(&(p[element].utime), &(q[element].utime), 1);
  
         __int8_t_clone_array(&(p[element].type), &(q[element].type), 1);
  

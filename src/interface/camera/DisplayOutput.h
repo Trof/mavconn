@@ -31,6 +31,7 @@ This file is part of the MAVCONN project
 #ifndef _DisplayOutput_H__
 #define _DisplayOutput_H__
 
+#include <opencv2/core/core_c.h>
 #include "CameraOperations.h"
 #include "timer/Timer.h"
 #include "mavconn.h"

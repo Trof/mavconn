@@ -8,7 +8,7 @@
 #ifndef PXSHAREDMEMCLIENT_H_
 #define PXSHAREDMEMCLIENT_H_
 
-#include <cv.hpp>
+#include <opencv2/core/core.hpp>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>

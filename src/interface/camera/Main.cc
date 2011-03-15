@@ -29,6 +29,7 @@ This file is part of the MAVCONN project
 ========================================================================*/
 
 #include <cstdlib>
+#include <opencv2/core/core_c.h>
 
 #include "Camera.h"
 

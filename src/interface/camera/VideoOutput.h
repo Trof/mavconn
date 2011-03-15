@@ -33,7 +33,7 @@ This file is part of the MAVCONN project
 
 #include "CameraOperations.h"
 #include "FPSTimer.h"
-#include <highgui.h>
+#include <opencv2/highgui/highgui.hpp>
 
 namespace MAVCONN
 {

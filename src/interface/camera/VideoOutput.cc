@@ -29,7 +29,8 @@ This file is part of the MAVCONN project
 ========================================================================*/
 
 #include "VideoOutput.h"
-#include <highgui.h>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc_c.h>
 #include <ctime>
 #include <algorithm>
 

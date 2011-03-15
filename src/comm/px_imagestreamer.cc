@@ -43,8 +43,8 @@ This file is part of the MAVCONN project
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 // OpenCV includes
-#include <cv.h>
-#include <highgui.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 // Latency Benchmarking
 // #include <sys/time.h>

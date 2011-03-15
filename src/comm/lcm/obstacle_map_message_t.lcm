@@ -1,5 +1,7 @@
 struct obstacle_map_message_t
 {
+    int64_t utime;
+
     int8_t type;
 
     float resolution;

@@ -19,6 +19,7 @@ extern "C" {
 typedef struct _obstacle_map_message_t obstacle_map_message_t;
 struct _obstacle_map_message_t
 {
+    int64_t    utime;
     int8_t     type;
     float      resolution;
     int32_t    num_rows;
