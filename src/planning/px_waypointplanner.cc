@@ -126,7 +126,7 @@ void send_waypoint_ack(uint8_t target_systemid, uint8_t target_compid, uint8_t t
     mavlink_msg_waypoint_ack_encode(systemid, compid, &msg, &wpa);
     mavlink_message_t_publish(lcm, "MAVLINK", &msg);
 
-    usleep(paramClient->getParamValue("PROTOCOLDELAY"));
+    usleep(paramClient->getParamValue("PROTDELAY"));
 
     if (verbose) printf("Sent waypoint ack (%u) to ID %u\n", wpa.type, wpa.target_system);
 }
@@ -152,7 +152,7 @@ void send_waypoint_current(uint16_t seq)
         mavlink_msg_waypoint_current_encode(systemid, compid, &msg, &wpc);
         mavlink_message_t_publish(lcm, "MAVLINK", &msg);
 
-        usleep(paramClient->getParamValue("PROTOCOLDELAY"));
+        usleep(paramClient->getParamValue("PROTDELAY"));
 
         if (verbose) printf("Broadcasted new current waypoint %u\n", wpc.seq);
     }
@@ -188,7 +188,7 @@ void send_setpoint(void)
             mavlink_msg_local_position_setpoint_set_encode(systemid, compid, &msg, &PControlSetPoint);
             mavlink_message_t_publish(lcm, "MAVLINK", &msg);
 
-            usleep(paramClient->getParamValue("PROTOCOLDELAY"));
+            usleep(paramClient->getParamValue("PROTDELAY"));
         }
         else
         {
@@ -215,7 +215,7 @@ void send_waypoint_count(uint8_t target_systemid, uint8_t target_compid, uint16_
 
     if (verbose) printf("Sent waypoint count (%u) to ID %u\n", wpc.count, wpc.target_system);
 
-    usleep(paramClient->getParamValue("PROTOCOLDELAY"));
+    usleep(paramClient->getParamValue("PROTDELAY"));
 }
 
 void send_waypoint(uint8_t target_systemid, uint8_t target_compid, uint16_t seq)
@@ -230,7 +230,7 @@ void send_waypoint(uint8_t target_systemid, uint8_t target_compid, uint16_t seq)
         mavlink_message_t_publish(lcm, "MAVLINK", &msg);
         if (verbose) printf("Sent waypoint %u to ID %u\n", wp->seq, wp->target_system);
 
-        usleep(paramClient->getParamValue("PROTOCOLDELAY"));
+        usleep(paramClient->getParamValue("PROTDELAY"));
     }
     else
     {
@@ -251,7 +251,7 @@ void send_waypoint_request(uint8_t target_systemid, uint8_t target_compid, uint1
         mavlink_message_t_publish(lcm, "MAVLINK", &msg);
         if (verbose) printf("Sent waypoint request %u to ID %u\n", wpr.seq, wpr.target_system);
 
-        usleep(paramClient->getParamValue("PROTOCOLDELAY"));
+        usleep(paramClient->getParamValue("PROTDELAY"));
     }
 
     else
@@ -278,7 +278,7 @@ void send_waypoint_reached(uint16_t seq)
 
     if (verbose) printf("Sent waypoint %u reached message\n", wp_reached.seq);
 
-    usleep(paramClient->getParamValue("PROTOCOLDELAY"));
+    usleep(paramClient->getParamValue("PROTDELAY"));
 }
 
 void set_destination(mavlink_waypoint_t* wp)
@@ -907,7 +907,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     struct timeval tv;
     gettimeofday(&tv, NULL);
     uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
-    if (now-protocol_timestamp_lastaction > paramClient->getParamValue("PROTOCOLTIMEOUT")*1000000 && current_state != PX_WPP_IDLE)
+    if (now-protocol_timestamp_lastaction > paramClient->getParamValue("PROTTIMEOUT")*1000000 && current_state != PX_WPP_IDLE)
     {
         if (verbose) printf("Last operation (state=%u) timed out, changing state to PX_WPP_IDLE\n", current_state);
         current_state = PX_WPP_IDLE;
@@ -1094,8 +1094,8 @@ int main(int argc, char* argv[])
     paramClient->setParamValue("POSFILTER", 1.f);
     paramClient->setParamValue("SETPOINTDELAY", 1.0);
     paramClient->setParamValue("HANDLEWPDELAY",0.1);
-    paramClient->setParamValue("PROTOCOLDELAY",40);	 //Attention: microseconds!!
-    paramClient->setParamValue("PROTOCOLTIMEOUT", 2.0);
+    paramClient->setParamValue("PROTDELAY",40);	 //Attention: microseconds!!
+    paramClient->setParamValue("PROTTIMEOUT", 2.0);
     paramClient->setParamValue("YAWTOLERANCE", 0.1745f);
     paramClient->readParamsFromFile(configFile);
 
