@@ -451,9 +451,9 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    	{
 	    		timestamp_delay_started = now;
 	    		if (verbose) printf("Delay initiated (%.2f sec)...\n", cur_wp->param1);
-	    		if (verbose && paramClient->getParamValue("HANDLEWAYPOINTDELAY")>cur_wp->param1)
+	    		if (verbose && paramClient->getParamValue("HANDLEWPDELAY")>cur_wp->param1)
 	    			{
-	    				printf("Warning: Delay shorter than HANDLEWAYPOINTDELAY parameter (%.2f sec)!\n", paramClient->getParamValue("HANDLEWAYPOINTDELAY"));
+	    				printf("Warning: Delay shorter than HANDLEWPDELAY parameter (%.2f sec)!\n", paramClient->getParamValue("HANDLEWPDELAY"));
 	    			}
 	    	}
 	    	if (now - timestamp_delay_started >= cur_wp->param1*1000000 && cur_wp->autocontinue == true)
@@ -1042,7 +1042,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     }
 
     // perform actions specified by current waypoint
-    if(now-timestamp_last_handle_waypoint > paramClient->getParamValue("HANDLEWAYPOINTDELAY")*1000000)
+    if(now-timestamp_last_handle_waypoint > paramClient->getParamValue("HANDLEWPDELAY")*1000000)
     {
     	handle_waypoint(current_active_wp_id,now);
     }
@@ -1093,7 +1093,7 @@ int main(int argc, char* argv[])
     paramClient = new PxParamClient(systemid, compid, lcm, configFile, verbose);
     paramClient->setParamValue("POSFILTER", 1.f);
     paramClient->setParamValue("SETPOINTDELAY", 1.0);
-    paramClient->setParamValue("HANDLEWAYPOINTDELAY",0.1);
+    paramClient->setParamValue("HANDLEWPDELAY",0.1);
     paramClient->setParamValue("PROTOCOLDELAY",40);	 //Attention: microseconds!!
     paramClient->setParamValue("PROTOCOLTIMEOUT", 2.0);
     paramClient->setParamValue("YAWTOLERANCE", 0.1745f);
