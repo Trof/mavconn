@@ -462,8 +462,10 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    		current_active_wp_id++;
 	    		if (verbose) printf("... delay finished. Proceed to next waypoint.\n");
 				cur_wp->current = false;
-				waypoints->at(current_active_wp_id)->current = true;
 				send_waypoint_current(current_active_wp_id);
+				waypoints->at(current_active_wp_id)->current = true;
+                posReached = false;
+                yawReached = false;
 	    	}
 	    	else
 	    	{
@@ -1093,7 +1095,7 @@ int main(int argc, char* argv[])
     paramClient = new PxParamClient(systemid, compid, lcm, configFile, verbose);
     paramClient->setParamValue("POSFILTER", 1.f);
     paramClient->setParamValue("SETPOINTDELAY", 1.0);
-    paramClient->setParamValue("HANDLEWPDELAY",0.1);
+    paramClient->setParamValue("HANDLEWPDELAY",1.0);
     paramClient->setParamValue("PROTDELAY",40);	 //Attention: microseconds!!
     paramClient->setParamValue("PROTTIMEOUT", 2.0);
     paramClient->setParamValue("YAWTOLERANCE", 0.1745f);

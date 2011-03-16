@@ -221,7 +221,7 @@ void calcPosition(mavlink_local_position_t* nextpos, mavlink_attitude_t* nextatt
 
 
 
-	printf("cur_dest.yaw = %.4f; currentatt.yaw = %.4f; ", cur_dest.yaw ,currentatt.yaw);
+	//printf("cur_dest.yaw = %.4f; currentatt.yaw = %.4f; ", cur_dest.yaw ,currentatt.yaw);
 	if (abs (cur_dest.yaw - currentatt.yaw) > phi)
 	{
 		float sign_rotation =(cur_dest.yaw - currentatt.yaw)/abs (cur_dest.yaw - currentatt.yaw);
