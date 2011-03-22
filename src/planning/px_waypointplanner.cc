@@ -188,6 +188,7 @@ void send_setpoint(void)
             mavlink_msg_local_position_setpoint_set_encode(systemid, compid, &msg, &PControlSetPoint);
             mavlink_message_t_publish(lcm, "MAVLINK", &msg);
 
+            if (verbose) printf("Sent setpoint: x: %.2f | y: %.2f | z: %.2f yaw: %.f\n", cur_dest.x, cur_dest.y, cur_dest.z, cur_dest.yaw);
             usleep(paramClient->getParamValue("PROTDELAY"));
         }
         else
@@ -1045,13 +1046,13 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     }
 
     // perform actions specified by current waypoint
-    if(now-timestamp_last_handle_waypoint > paramClient->getParamValue("HANDLEWPDELAY")*1000000)
+    if(now-timestamp_last_handle_waypoint > paramClient->getParamValue("HANDLEWPDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
     {
     	handle_waypoint(current_active_wp_id,now);
     }
 
     // resend current destination every "SETPOINTDELAY" seconds
-    if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000)
+    if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
     {
     	if (verbose) printf("Send setpoint: x: %.2f | y: %.2f | z: %.2f | yaw: %.3f\n", cur_dest.x, cur_dest.y, cur_dest.z, cur_dest.yaw);
         send_setpoint();
@@ -1102,6 +1103,13 @@ int main(int argc, char* argv[])
     paramClient->setParamValue("YAWTOLERANCE", 0.1745f);
     paramClient->readParamsFromFile(configFile);
 
+    //initialize current destination as (0,0,0) local coordinates
+    cur_dest.frame = 1; ///< The coordinate system of the waypoint. see MAV_FRAME in mavlink_types.h
+	cur_dest.x = 0; //local: x position, global: longitude
+	cur_dest.y = 0; //local: y position, global: latitude
+	cur_dest.z = 0; //local: z position, global: altitude
+	cur_dest.yaw = 0; //Yaw orientation in degrees, [0..360] 0 = NORTH
+	cur_dest.rad = 0;
 
     if (waypointfile.length())
     {
@@ -1184,14 +1192,6 @@ int main(int argc, char* argv[])
         }
         wpfile.close();
 
-        //initialize current destination as (0,0,0) local coordinates
-        cur_dest.frame = 1; ///< The coordinate system of the waypoint. see MAV_FRAME in mavlink_types.h
-    	cur_dest.x = 0; //local: x position, global: longitude
-    	cur_dest.y = 0; //local: y position, global: latitude
-    	cur_dest.z = 0; //local: z position, global: altitude
-    	cur_dest.yaw = 0; //Yaw orientation in degrees, [0..360] 0 = NORTH
-    	cur_dest.rad = 0;
-
         //get the new current waypoint
         struct timeval tv;
         gettimeofday(&tv, NULL);
@@ -1218,7 +1218,6 @@ int main(int argc, char* argv[])
         }
 
     }
-
 
     printf("WAYPOINTPLANNER INITIALIZATION DONE, RUNNING...\n");
 
