@@ -43,13 +43,13 @@ typedef struct _mav_destination
 //==== variables for the planner ====
 bool idle = false;      				///< indicates if the system is following the waypoints or is waiting
 uint16_t current_active_wp_id = -1;		///< id of current waypoint
-bool yawReached;						///< boolean for yaw attitude reached
-bool posReached;						///< boolean for position reached
 uint64_t timestamp_lastoutside_orbit = 0;///< timestamp when the MAV was last outside the orbit or had the wrong yaw value
 uint64_t timestamp_firstinside_orbit = 0;///< timestamp when the MAV was the first time after a waypoint change inside the orbit and had the correct yaw value
 uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay command was initiated
 
 mav_destination cur_dest;				 ///< current flight destination
+mavlink_local_position_t last_known_pos; ///< latest received position of MAV
+mavlink_attitude_t last_known_att;		 ///< latest received attitude of MAV
 
 std::vector<mavlink_waypoint_t*> waypoints1;	///< vector1 that holds the waypoints
 std::vector<mavlink_waypoint_t*> waypoints2;	///< vector2 that holds the waypoints
@@ -384,8 +384,52 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    case MAV_CMD_NAV_WAYPOINT:
 	    {
 	    	set_destination(cur_wp);
+
+	    	bool yawReached = false;						///< boolean for yaw attitude reached
+	    	bool posReached = false;						///< boolean for position reached
+
+            // compare last known position with current destination
+            float dist;
+            uint16_t next_wp_id = seq+1;
+            if (waypoints->at(seq)->param1 == 0 && next_wp_id < waypoints->size() && waypoints->at(next_wp_id)->command == MAV_CMD_NAV_WAYPOINT)
+            {
+            	//if (debug) printf("Both current and next waypoint (%u) are MAV_CMD_NAV_WAYPOINT. Using distanceToSegment.\n", next_wp_id);
+                dist = distanceToSegment(last_known_pos.x, last_known_pos.y, last_known_pos.z, next_wp_id);
+            }
+            else
+            {
+                dist = distanceToPoint(last_known_pos.x, last_known_pos.y, last_known_pos.z);
+            }
+
+            //if (dist >= 0.f && dist <= cur_dest.rad && yawReached)
+            if (dist >= 0.f && dist <= cur_dest.rad)
+            {
+                posReached = true;
+            }
+
+	    	// yaw reached?
+            float yaw_tolerance = paramClient->getParamValue("YAWTOLERANCE");
+            //compare last known yaw with current desired yaw
+            if (last_known_att.yaw - yaw_tolerance >= 0.0f && last_known_att.yaw + yaw_tolerance < 2.f*M_PI)
+            {
+                if (last_known_att.yaw - yaw_tolerance <= cur_dest.yaw*M_PI/180 && last_known_att.yaw + yaw_tolerance >= cur_dest.yaw*M_PI/180)
+                    yawReached = true;
+            }
+            else if(last_known_att.yaw - yaw_tolerance < 0.0f)
+            {
+                float lowerBound = 2.f*M_PI + last_known_att.yaw - yaw_tolerance;
+                if (lowerBound < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < last_known_att.yaw + yaw_tolerance)
+                    yawReached = true;
+            }
+            else
+            {
+                float upperBound = last_known_att.yaw + yaw_tolerance - 2.f*M_PI;
+                if (last_known_att.yaw - yaw_tolerance < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < upperBound)
+                    yawReached = true;
+            }
 	    		//check if the current waypoint was reached
-	    	    if ((posReached && /*yawReached &&*/ !idle))
+
+	    	    if ((posReached && yawReached && !idle))
 	    	    {
     	            if (timestamp_firstinside_orbit == 0)
     	            {
@@ -408,8 +452,8 @@ void handle_waypoint (uint16_t seq, uint64_t now)
         	                    timestamp_firstinside_orbit = 0;
         	                    send_waypoint_current(current_active_wp_id);
         	                    waypoints->at(current_active_wp_id)->current = true;
-        	                    posReached = false;
-        	                    yawReached = false;
+        	                    //posReached = false;
+        	                    //yawReached = false;
         	                    if (verbose) printf("Set new waypoint (%u)\n", current_active_wp_id);
     	                    }
     	                    else
@@ -464,8 +508,8 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 				cur_wp->current = false;
 				send_waypoint_current(current_active_wp_id);
 				waypoints->at(current_active_wp_id)->current = true;
-                posReached = false;
-                yawReached = false;
+                //posReached = false;
+                //yawReached = false;
 	    	}
 	    	else
 	    	{
@@ -599,8 +643,8 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                        }
 	                        if (verbose) printf("New current waypoint %u\n", current_active_wp_id);
 	                        send_waypoint_current(current_active_wp_id);
-	                        yawReached = false;
-	                        posReached = false;
+	                        //yawReached = false;
+	                        //posReached = false;
 	                        handle_waypoint(current_active_wp_id,now);
 	                        send_setpoint();
 	                        timestamp_firstinside_orbit = 0;
@@ -735,8 +779,8 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                            waypoints->pop_back();
 	                        }
 	                        current_active_wp_id = -1;
-	                        yawReached = false;
-	                        posReached = false;
+	                        //yawReached = false;
+	                        //posReached = false;
 	                        break;
 
 	                    }
@@ -802,12 +846,10 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                            {
 	                                current_active_wp_id = i;
 	                                //if (verbose) printf("New current waypoint %u\n", current_active_wp_id);
-	                                yawReached = false;
-	                                posReached = false;
+	                                //yawReached = false;
+	                                //posReached = false;
 	                                send_waypoint_current(current_active_wp_id);
-	                                if (verbose) printf("\n start handle. posreached = %u, x = %.2f\n", posReached,cur_dest.x);
 	                                handle_waypoint(current_active_wp_id,now);
-	                                if (verbose) printf("\n finish handle. posreached = %u, x = %.2f\n", posReached,cur_dest.x);
 	                                send_setpoint();
 	                                timestamp_firstinside_orbit = 0;
 	                                break;
@@ -817,8 +859,8 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                        if (i == waypoints->size())
 	                        {
 	                            current_active_wp_id = -1;
-	                            yawReached = false;
-	                            posReached = false;
+	                            //yawReached = false;
+	                            //posReached = false;
 	                            timestamp_firstinside_orbit = 0;
 	                        }
 
@@ -886,8 +928,8 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                    waypoints->pop_back();
 	                }
 	                current_active_wp_id = -1;
-	                yawReached = false;
-	                posReached = false;
+	                //yawReached = false;
+	                //posReached = false;
 	            }
 	            else if (wpca.target_system == systemid && wpca.target_component == compid && current_state != PX_WPP_IDLE)
 	            {
@@ -934,27 +976,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
             {
                 if(cur_dest.frame == 1)
                 {
-                    mavlink_attitude_t att;
-                    mavlink_msg_attitude_decode(msg, &att);
-                    float yaw_tolerance = paramClient->getParamValue("YAWTOLERANCE");
-                    //compare current yaw
-                    if (att.yaw - yaw_tolerance >= 0.0f && att.yaw + yaw_tolerance < 2.f*M_PI)
-                    {
-                        if (att.yaw - yaw_tolerance <= cur_dest.yaw*M_PI/180 && att.yaw + yaw_tolerance >= cur_dest.yaw*M_PI/180)
-                            yawReached = true;
-                    }
-                    else if(att.yaw - yaw_tolerance < 0.0f)
-                    {
-                        float lowerBound = 2.f*M_PI + att.yaw - yaw_tolerance;
-                        if (lowerBound < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < att.yaw + yaw_tolerance)
-                            yawReached = true;
-                    }
-                    else
-                    {
-                        float upperBound = att.yaw + yaw_tolerance - 2.f*M_PI;
-                        if (att.yaw - yaw_tolerance < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < upperBound)
-                            yawReached = true;
-                    }
+                    mavlink_msg_attitude_decode(msg, &last_known_att);
                 }
             }
             break;
@@ -966,29 +988,8 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
             {
                 if(cur_dest.frame == 1)
                 {
-                    mavlink_local_position_t pos;
-                    mavlink_msg_local_position_decode(msg, &pos);
-                    if (debug) printf("Received new position: x: %f | y: %f | z: %f\n", pos.x, pos.y, pos.z);
-
-                    posReached = false;
-
-                    // compare current position (given in message) with current destination
-                    float dist;
-                    uint16_t next_wp_id =  current_active_wp_id+1;
-                    if ( waypoints->at(current_active_wp_id)->param1 == 0 && next_wp_id < waypoints->size() && waypoints->at(current_active_wp_id)->command == MAV_CMD_NAV_WAYPOINT && waypoints->at(next_wp_id)->command == MAV_CMD_NAV_WAYPOINT)
-                    {
-                    	//if (debug) printf("Both current and next waypoint (%u) are MAV_CMD_NAV_WAYPOINT. Using distanceToSegment.\n", next_wp_id);
-                        dist = distanceToSegment(pos.x, pos.y, pos.z, next_wp_id);
-                    }
-                    else
-                    {
-                        dist = distanceToPoint(pos.x, pos.y, pos.z);
-                    }
-
-                    if (dist >= 0.f && dist <= cur_dest.rad && yawReached)
-                    {
-                        posReached = true;
-                    }
+                    mavlink_msg_local_position_decode(msg, &last_known_pos);
+                    if (debug) printf("Received new position: x: %f | y: %f | z: %f\n", last_known_pos.x, last_known_pos.y, last_known_pos.z);
                 }
             }
             break;
@@ -1212,7 +1213,7 @@ int main(int argc, char* argv[])
         if (i == waypoints->size())
         {
             current_active_wp_id = -1;
-            posReached = false;
+            //posReached = false;
             timestamp_firstinside_orbit = 0;
         }
 
