@@ -244,7 +244,7 @@ int main (int argc, char ** argv)
 	//initialize variables
 	currentpos.x=0; currentpos.y=0; currentpos.z=-0.5;
 	currentpos.vx=0; currentpos.vy=0; currentpos.vz=0;
-	currentatt.pitch=0; currentatt.roll=0; currentatt.yaw=30;
+	currentatt.pitch=0; currentatt.roll=0; currentatt.yaw=0;
 	currentatt.pitchspeed=0; currentatt.rollspeed=0; currentatt.yawspeed=0;
 
 	cur_dest.frame = 1; ///< The coordinate system of the waypoint. see MAV_FRAME in mavlink_types.h

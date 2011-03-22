@@ -1052,7 +1052,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     // resend current destination every "SETPOINTDELAY" seconds
     if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000)
     {
-    	if (verbose) printf("Send setpoint: x: %.2f | y: %.2f | z: %.2f yaw: %.f\n", cur_dest.x, cur_dest.y, cur_dest.z, cur_dest.yaw);
+    	if (verbose) printf("Send setpoint: x: %.2f | y: %.2f | z: %.2f | yaw: %.3f\n", cur_dest.x, cur_dest.y, cur_dest.z, cur_dest.yaw);
         send_setpoint();
     }
 
