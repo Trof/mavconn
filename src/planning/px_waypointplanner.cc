@@ -23,6 +23,8 @@
 namespace config = boost::program_options;
 
 lcm_t* lcm;
+mavlink_message_t_subscription_t* comm_sub;
+
 
 bool debug;             	///< boolean for debug output or behavior
 bool verbose;           	///< boolean for verbose output
@@ -56,6 +58,11 @@ std::vector<mavlink_waypoint_t*> waypoints2;	///< vector2 that holds the waypoin
 
 std::vector<mavlink_waypoint_t*>* waypoints = &waypoints1;					///< pointer to the currently active waypoint vector
 std::vector<mavlink_waypoint_t*>* waypoints_receive_buffer = &waypoints2;	///< pointer to the receive buffer waypoint vector
+
+
+GThread* waypoint_lcm_thread = NULL;
+static GStaticMutex *main_mutex = new GStaticMutex;
+
 
 //==== variables needed for communication protocol ====
 uint8_t systemid = getSystemID();          		///< indicates the ID of the system
@@ -109,7 +116,6 @@ uint8_t protocol_current_partner_compid = 0;
 uint64_t protocol_timestamp_lastaction = 0;
 uint64_t timestamp_last_send_setpoint = 0;
 uint64_t timestamp_last_handle_waypoint = 0;
-
 
 void send_waypoint_ack(uint8_t target_systemid, uint8_t target_compid, uint8_t type)
 /*
@@ -260,6 +266,7 @@ void send_waypoint_request(uint8_t target_systemid, uint8_t target_compid, uint1
         if (verbose) printf("ERROR: index out of bounds. seq = %u ,size = %u\n",seq,waypoints->size());
     }
 }
+
 void send_waypoint_reached(uint16_t seq)
 /*
 *  @brief emits a message that a waypoint reached
@@ -296,7 +303,6 @@ void set_destination(mavlink_waypoint_t* wp)
 		if (verbose) printf("Warning: New destination coordinates do not origin from MAV_CMD_NAV_WAYPOINT waypoint.\n");
 	}
 }
-
 
 float distanceToSegment(float x, float y, float z , uint16_t next_NAV_wp_id)
 {
@@ -884,13 +890,98 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            }
 	            break;
 	        }
+
+	    case MAVLINK_MSG_ID_ATTITUDE:
+	        {
+	            if(msg->sysid == systemid)
+	            {
+	                if(cur_dest.frame == 1)
+	                {
+	                    mavlink_msg_attitude_decode(msg, &last_known_att);
+	                    struct timeval tv;
+                        gettimeofday(&tv, NULL);
+                        uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
+                        if(now-timestamp_last_handle_waypoint > paramClient->getParamValue("HANDLEWPDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
+                        {
+                        	handle_waypoint(current_active_wp_id,now);
+                        }
+	                }
+	            }
+	            break;
+	        }
+
+	    case MAVLINK_MSG_ID_LOCAL_POSITION:
+	        {
+	            if(msg->sysid == systemid)
+	            {
+	                if(cur_dest.frame == 1)
+	                {
+	                    mavlink_msg_local_position_decode(msg, &last_known_pos);
+	                    if (debug) printf("Received new position: x: %f | y: %f | z: %f\n", last_known_pos.x, last_known_pos.y, last_known_pos.z);
+	                    struct timeval tv;
+                        gettimeofday(&tv, NULL);
+                        uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
+                        if(now-timestamp_last_handle_waypoint > paramClient->getParamValue("HANDLEWPDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
+                        {
+                        	handle_waypoint(current_active_wp_id,now);
+                        }
+	                }
+	            }
+	            break;
+	        }
+
+	    case MAVLINK_MSG_ID_ACTION: // special action from ground station
+	        {
+	            mavlink_action_t action;
+	            mavlink_msg_action_decode(msg, &action);
+	            if(action.target == systemid)
+	            {
+	                if (verbose) std::cerr << "Waypoint: received message with action " << action.action << std::endl;
+	                switch (action.action)
+	                {
+	                    //				case MAV_ACTION_LAUNCH:
+	                    //					if (verbose) std::cerr << "Launch received" << std::endl;
+	                    //					current_active_wp_id = 0;
+	                    //					if (waypoints->size()>0)
+	                    //					{
+	                    //						setActive(waypoints[current_active_wp_id]);
+	                    //					}
+	                    //					else
+	                    //						if (verbose) std::cerr << "No launch, waypointList empty" << std::endl;
+	                    //					break;
+
+	                    //				case MAV_ACTION_CONTINUE:
+	                    //					if (verbose) std::c
+	                    //					err << "Continue received" << std::endl;
+	                    //					idle = false;
+	                    //					setActive(waypoints[current_active_wp_id]);
+	                    //					break;
+
+	                    //				case MAV_ACTION_HALT:
+	                    //					if (verbose) std::cerr << "Halt received" << std::endl;
+	                    //					idle = true;
+	                    //					break;
+
+	                    //				default:
+	                    //					if (verbose) std::cerr << "Unknown action received with id " << action.action << ", no action taken" << std::endl;
+	                    //					break;
+	                }
+	            }
+	            break;
+	        }
+
+		default:
+        {
+            if (debug) std::cerr << "Waypoint: received message of unknown type" << std::endl;
+            break;
+        }
+
 	}
 }
 
-
-
 static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, const mavlink_message_t* msg, void * user)
 {
+	g_static_mutex_lock(main_mutex);
     // Handle param messages
     paramClient->handleMAVLinkPacket(msg);
 
@@ -914,93 +1005,25 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     }
 
     handle_communication(msg, now);
+    g_static_mutex_unlock(main_mutex);
 
-    switch(msg->msgid)
-    {
-    case MAVLINK_MSG_ID_ATTITUDE:
-        {
-            if(msg->sysid == systemid)
-            {
-                if(cur_dest.frame == 1)
-                {
-                    mavlink_msg_attitude_decode(msg, &last_known_att);
-                }
-            }
-            break;
-        }
-
-    case MAVLINK_MSG_ID_LOCAL_POSITION:
-        {
-            if(msg->sysid == systemid)
-            {
-                if(cur_dest.frame == 1)
-                {
-                    mavlink_msg_local_position_decode(msg, &last_known_pos);
-                    if (debug) printf("Received new position: x: %f | y: %f | z: %f\n", last_known_pos.x, last_known_pos.y, last_known_pos.z);
-                }
-            }
-            break;
-        }
-
-    case MAVLINK_MSG_ID_ACTION: // special action from ground station
-        {
-            mavlink_action_t action;
-            mavlink_msg_action_decode(msg, &action);
-            if(action.target == systemid)
-            {
-                if (verbose) std::cerr << "Waypoint: received message with action " << action.action << std::endl;
-                switch (action.action)
-                {
-                    //				case MAV_ACTION_LAUNCH:
-                    //					if (verbose) std::cerr << "Launch received" << std::endl;
-                    //					current_active_wp_id = 0;
-                    //					if (waypoints->size()>0)
-                    //					{
-                    //						setActive(waypoints[current_active_wp_id]);
-                    //					}
-                    //					else
-                    //						if (verbose) std::cerr << "No launch, waypointList empty" << std::endl;
-                    //					break;
-
-                    //				case MAV_ACTION_CONTINUE:
-                    //					if (verbose) std::c
-                    //					err << "Continue received" << std::endl;
-                    //					idle = false;
-                    //					setActive(waypoints[current_active_wp_id]);
-                    //					break;
-
-                    //				case MAV_ACTION_HALT:
-                    //					if (verbose) std::cerr << "Halt received" << std::endl;
-                    //					idle = true;
-                    //					break;
-
-                    //				default:
-                    //					if (verbose) std::cerr << "Unknown action received with id " << action.action << ", no action taken" << std::endl;
-                    //					break;
-                }
-            }
-            break;
-        }
-
-		default:
-        {
-            if (debug) std::cerr << "Waypoint: received message of unknown type" << std::endl;
-            break;
-        }
-    }
-
-    // perform actions specified by current waypoint
+    /*
+    // periodically perform actions specified by current waypoint
     if(now-timestamp_last_handle_waypoint > paramClient->getParamValue("HANDLEWPDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
     {
     	handle_waypoint(current_active_wp_id,now);
     }
+	*/
+}
 
-    // resend current destination every "SETPOINTDELAY" seconds
-    if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
-    {
-        send_setpoint();
-    }
-
+void* lcm_thread_func (gpointer lcm_ptr)
+{
+	lcm_t* lcm = (lcm_t*) lcm_ptr;
+	while (1)
+	{
+		lcm_handle(lcm);
+	}
+	return NULL;
 }
 
 int main(int argc, char* argv[])
@@ -1010,7 +1033,8 @@ int main(int argc, char* argv[])
 *  The function parses for program options, sets up some example waypoints and connects to IPC
 */
 {
-    std::string waypointfile;
+
+	std::string waypointfile;
     config::options_description desc("Allowed options");
     desc.add_options()
             ("help", "produce help message")
@@ -1029,20 +1053,6 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    lcm = lcm_create ("udpm://");
-    if (!lcm)
-        return 1;
-
-    mavlink_message_t_subscription_t * comm_sub = mavlink_message_t_subscribe (lcm, "MAVLINK", &mavlink_handler, NULL);
-
-    paramClient = new PxParamClient(systemid, compid, lcm, configFile, verbose);
-    paramClient->setParamValue("POSFILTER", 1.f);
-    paramClient->setParamValue("SETPOINTDELAY", 1.0);
-    paramClient->setParamValue("HANDLEWPDELAY",1.0);
-    paramClient->setParamValue("PROTDELAY",40);	 //Attention: microseconds!!
-    paramClient->setParamValue("PROTTIMEOUT", 2.0);
-    paramClient->setParamValue("YAWTOLERANCE", 0.1745f);
-    paramClient->readParamsFromFile(configFile);
 
     //initialize current destination as (0,0,0) local coordinates
     cur_dest.frame = 1; ///< The coordinate system of the waypoint. see MAV_FRAME in mavlink_types.h
@@ -1052,6 +1062,57 @@ int main(int argc, char* argv[])
 	cur_dest.yaw = 0; //Yaw orientation in degrees, [0..360] 0 = NORTH
 	cur_dest.rad = 0;
 
+    lcm = lcm_create ("udpm://");
+    if (!lcm)
+    {
+    	printf("LCM failed.\n");
+    	return NULL;
+    }
+    comm_sub = mavlink_message_t_subscribe (lcm, "MAVLINK", &mavlink_handler, NULL);
+
+    paramClient = new PxParamClient(systemid, compid, lcm, configFile, verbose);
+    paramClient->setParamValue("POSFILTER", 1.f);
+    paramClient->setParamValue("SETPOINTDELAY", 1.0);
+    paramClient->setParamValue("HANDLEWPDELAY",0.2);
+    paramClient->setParamValue("PROTDELAY",40);	 //Attention: microseconds!!
+    paramClient->setParamValue("PROTTIMEOUT", 2.0);
+    paramClient->setParamValue("YAWTOLERANCE", 0.1745f);
+    paramClient->readParamsFromFile(configFile);
+
+
+
+
+    /**********************************
+    * Run the LCM thread
+    **********************************/
+	if( !g_thread_supported() )
+	{
+		g_thread_init(NULL);
+		// Only initialize g thread if not already done
+	}
+	GError *error = NULL;
+	gpointer lcm_ptr = (gpointer) lcm;
+
+	if( (waypoint_lcm_thread = g_thread_create(lcm_thread_func, lcm_ptr, TRUE, &error)) == NULL)
+	{
+		printf("Thread creation failed: %s!!\n", error->message );
+		g_error_free ( error ) ;
+	}
+
+    /**********************************
+    * Initialize mutex
+    **********************************/
+	if (!main_mutex)
+	{
+		g_static_mutex_init(main_mutex);
+	}
+
+
+    /**********************************
+    * Read waypoints from file and
+    * set the new current waypoint
+    **********************************/
+	g_static_mutex_lock(main_mutex);
     if (waypointfile.length())
     {
         std::ifstream wpfile;
@@ -1132,7 +1193,6 @@ int main(int argc, char* argv[])
         }
         wpfile.close();
 
-        //get the new current waypoint
         struct timeval tv;
         gettimeofday(&tv, NULL);
         uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
@@ -1149,7 +1209,6 @@ int main(int argc, char* argv[])
         		break;
             }
         }
-
         if (i == waypoints->size())
         {
             current_active_wp_id = -1;
@@ -1157,14 +1216,30 @@ int main(int argc, char* argv[])
         }
 
     }
+    g_static_mutex_unlock(main_mutex);
+
 
     printf("WAYPOINTPLANNER INITIALIZATION DONE, RUNNING...\n");
-
-    while (1)
+    while (1)//need some break condition, e.g. if lcm fails
     {
-        lcm_handle (lcm);
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
+
+        // resend current destination every "SETPOINTDELAY" seconds
+        g_static_mutex_lock(main_mutex);
+        if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
+        {
+            send_setpoint();
+        }
+        g_static_mutex_unlock(main_mutex);
     }
 
-    mavlink_message_t_unsubscribe (lcm, comm_sub);
-    lcm_destroy (lcm);
+    /**********************************
+    * Terminate the LCM
+    **********************************/
+	mavlink_message_t_unsubscribe (lcm, comm_sub);
+	lcm_destroy (lcm);
+	printf("WAYPOINTPLANNER TERMINATED\n");
+
 }
