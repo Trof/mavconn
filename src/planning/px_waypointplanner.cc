@@ -263,7 +263,7 @@ void send_waypoint_request(uint8_t target_systemid, uint8_t target_compid, uint1
 
     else
     {
-        if (verbose) printf("ERROR: index out of bounds. seq = %u ,size = %u\n",seq,waypoints->size());
+        if (verbose) printf("ERROR: index out of bounds. seq = %u ,size = %u\n",seq,(uint16_t) waypoints->size());
     }
 }
 
@@ -766,7 +766,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            if((msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && (wp.target_system == systemid && wp.target_component == compid))
 	            {
 	                protocol_timestamp_lastaction = now;
-	                printf("Received WP % 3u%s: Frame: %u\tCommand: % 3u\tparam1: % 6.2f\tparam2: % 7.2f\tparam3: % 6.2f\tparam4: % 7.2f\tX: % 7.2f\tY: % 7.2f\tZ: % 7.2f\tAuto-Cont: %u\t\n", wp.seq, (wp.current?"*":" "), wp.frame, wp.command, wp.param1, wp.param2, wp.param3, wp.param4, wp.x, wp.y, wp.z, wp.autocontinue);
+	                printf("Received WP %3u%s: Frame: %u\tCommand: %3u\tparam1: %6.2f\tparam2: %7.2f\tparam3: %6.2f\tparam4: %7.2f\tX: %7.2f\tY: %7.2f\tZ: %7.2f\tAuto-Cont: %u\t\n", wp.seq, (wp.current?"*":" "), wp.frame, wp.command, wp.param1, wp.param2, wp.param3, wp.param4, wp.x, wp.y, wp.z, wp.autocontinue);
 
 	                //ensure that we are in the correct state and that the first waypoint has id 0 and the following waypoints have the correct ids
 	                if ((current_state == PX_WPP_GETLIST && wp.seq == 0) || (current_state == PX_WPP_GETLIST_GETWPS && wp.seq == protocol_current_wp_id && wp.seq < protocol_current_count))
@@ -1183,7 +1183,7 @@ int main(int argc, char* argv[])
                     break;
                 }
 
-                printf("WP % 3u%s: Frame: %u\tCommand: % 3u\tparam1: % 6.2f\tparam2: % 7.2f\tparam3: % 6.2f\tparam4: % 7.2f\tX: % 7.2f\tY: % 7.2f\tZ: % 7.2f\tAuto-Cont: %u\t\n", wp->seq, (wp->current?"*":" "), wp->frame, wp->command, wp->param1, wp->param2, wp->param3, wp->param4, wp->x, wp->y, wp->z, wp->autocontinue);
+                printf("WP %3u%s: Frame: %u\tCommand: %3u\tparam1: %6.2f\tparam2: %7.2f\tparam3: %6.2f\tparam4: %7.2f\tX: %7.2f\tY: %7.2f\tZ: %7.2f\tAuto-Cont: %u\t\n", wp->seq, (wp->current?"*":" "), wp->frame, wp->command, wp->param1, wp->param2, wp->param3, wp->param4, wp->x, wp->y, wp->z, wp->autocontinue);
                 waypoints->push_back(wp);
             }
         }
