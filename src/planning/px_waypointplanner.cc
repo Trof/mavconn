@@ -982,6 +982,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, const mavlink_message_t* msg, void * user)
 {
 	g_static_mutex_lock(main_mutex);
+
     // Handle param messages
     paramClient->handleMAVLinkPacket(msg);
 
@@ -1005,15 +1006,8 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     }
 
     handle_communication(msg, now);
-    g_static_mutex_unlock(main_mutex);
 
-    /*
-    // periodically perform actions specified by current waypoint
-    if(now-timestamp_last_handle_waypoint > paramClient->getParamValue("HANDLEWPDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
-    {
-    	handle_waypoint(current_active_wp_id,now);
-    }
-	*/
+    g_static_mutex_unlock(main_mutex);
 }
 
 void* lcm_thread_func (gpointer lcm_ptr)
@@ -1062,6 +1056,9 @@ int main(int argc, char* argv[])
 	cur_dest.yaw = 0; //Yaw orientation in degrees, [0..360] 0 = NORTH
 	cur_dest.rad = 0;
 
+    /**********************************
+    * Run LCM and subscribe to MAVLINK
+    **********************************/
     lcm = lcm_create ("udpm://");
     if (!lcm)
     {
@@ -1070,6 +1067,10 @@ int main(int argc, char* argv[])
     }
     comm_sub = mavlink_message_t_subscribe (lcm, "MAVLINK", &mavlink_handler, NULL);
 
+
+    /**********************************
+    * Set default parameters and read parameters from file, if available
+    **********************************/
     paramClient = new PxParamClient(systemid, compid, lcm, configFile, verbose);
     paramClient->setParamValue("POSFILTER", 1.f);
     paramClient->setParamValue("SETPOINTDELAY", 1.0);
@@ -1078,8 +1079,6 @@ int main(int argc, char* argv[])
     paramClient->setParamValue("PROTTIMEOUT", 2.0);
     paramClient->setParamValue("YAWTOLERANCE", 0.1745f);
     paramClient->readParamsFromFile(configFile);
-
-
 
 
     /**********************************
@@ -1220,7 +1219,11 @@ int main(int argc, char* argv[])
 
 
     printf("WAYPOINTPLANNER INITIALIZATION DONE, RUNNING...\n");
-    while (1)//need some break condition, e.g. if lcm fails
+
+    /**********************************
+    * Main loop
+    **********************************/
+    while (1)//need some break condition, e.g. if LCM fails
     {
         struct timeval tv;
         gettimeofday(&tv, NULL);

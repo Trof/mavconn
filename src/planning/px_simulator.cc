@@ -198,7 +198,7 @@ void calcPosition(mavlink_local_position_t* nextpos, mavlink_attitude_t* nextatt
 
 	//movement and rotation speed
 	float v = 0.05; //
-	float phi = 1; //
+	float phi = 5; //
 
 	float mag = sqrt((cur_dest.x - currentpos.x)*(cur_dest.x - currentpos.x) + (cur_dest.y - currentpos.y)*(cur_dest.y - currentpos.y) + (cur_dest.z - currentpos.z)*(cur_dest.z - currentpos.z));
 	if (mag > v)
