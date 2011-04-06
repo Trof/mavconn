@@ -1054,7 +1054,7 @@ int main(int argc, char* argv[])
 	cur_dest.y = 0; //local: y position, global: latitude
 	cur_dest.z = 0; //local: z position, global: altitude
 	cur_dest.yaw = 0; //Yaw orientation in degrees, [0..360] 0 = NORTH
-	cur_dest.rad = 0;
+	cur_dest.rad = 0; //Acceptance radius, in meter
 
     /**********************************
     * Run LCM and subscribe to MAVLINK
@@ -1069,7 +1069,8 @@ int main(int argc, char* argv[])
 
 
     /**********************************
-    * Set default parameters and read parameters from file, if available
+    * Set default parameters and read parameters from file, if available.
+    * Warning: Parameter name may not be longer than 14 characters!!!
     **********************************/
     paramClient = new PxParamClient(systemid, compid, lcm, configFile, verbose);
     paramClient->setParamValue("POSFILTER", 1.f);
