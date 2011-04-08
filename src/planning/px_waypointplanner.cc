@@ -49,6 +49,10 @@ uint64_t timestamp_lastoutside_orbit = 0;///< timestamp when the MAV was last ou
 uint64_t timestamp_firstinside_orbit = 0;///< timestamp when the MAV was the first time after a waypoint change inside the orbit and had the correct yaw value
 uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay command was initiated
 
+uint16_t search_success = false; ///< variable for testing search waypoint commands
+mavlink_local_position_t search_success_pos; ///< position of MAV when it succeeded in search
+mavlink_attitude_t search_success_att;		 ///< attitude of MAV when it succeeded in search
+
 mav_destination cur_dest;				 ///< current flight destination
 mavlink_local_position_t last_known_pos; ///< latest received position of MAV
 mavlink_attitude_t last_known_att;		 ///< latest received attitude of MAV
@@ -59,7 +63,7 @@ std::vector<mavlink_waypoint_t*> waypoints2;	///< vector2 that holds the waypoin
 std::vector<mavlink_waypoint_t*>* waypoints = &waypoints1;					///< pointer to the currently active waypoint vector
 std::vector<mavlink_waypoint_t*>* waypoints_receive_buffer = &waypoints2;	///< pointer to the receive buffer waypoint vector
 
-
+GError *error = NULL;
 GThread* waypoint_lcm_thread = NULL;
 static GStaticMutex *main_mutex = new GStaticMutex;
 
@@ -80,32 +84,17 @@ enum PX_WAYPOINTPLANNER_STATES
     PX_WPP_GETLIST_GOTALL
 };
 
-/*
+
 enum MAV_CMD_ID
 {
 	//MAV_CMD_NAV_WAYPOINT = 16,     //Navigate to waypoint
-	//MAV_CMD_NAV_LOITER_UNLIM = 17, //Loiter around this waypoint an unlimited amount of time
-	//MAV_CMD_NAV_LOITER_TURNS = 18, //Loiter around this waypoint for X turns
-	//MAV_CMD_NAV_LOITER_TIME	= 19,  //Loiter around this waypoint for X seconds
-	//MAV_CMD_NAV_RETURN_TO_LAUNCH = 20, //Return to launch location
-	//MAV_CMD_NAV_LAND = 21,	//Land at location
-	//MAV_CMD_NAV_TAKEOFF	= 22, //Takeoff from ground / hand
-	MAV_CMD_NAV_LAST = 95,  //NOP - This command is only used to mark the upper limit of the NAV/ACTION commands in the enumeration
-	MAV_CMD_CONDITION_DELAY = 112,	//Delay mission state machine.
-	MAV_CMD_CONDITION_CHANGE_ALT = 113, //Ascend/descend at rate. Delay mission state machine until desired altitude reached.
-	MAV_CMD_CONDITION_DISTANCE = 114,	//Delay mission state machine until within desired distance of next NAV point.
-	MAV_CMD_CONDITION_LAST = 159,	//NOP - This command is only used to mark the upper limit of the CONDITION commands in the enumeration
-	MAV_CMD_DO_SET_MODE = 176,	//Set system mode.
-	MAV_CMD_DO_JUMP	= 177, //Jump to the desired command in the mission list. Repeat this action only the specified number of times
-	MAV_CMD_DO_CHANGE_SPEED = 178, //Change speed and/or throttle set points.
-	MAV_CMD_DO_SET_HOME = 179, //Changes the home location either to the current location or a specified location.
-	MAV_CMD_DO_SET_PARAMETER = 180, //	Set a system parameter. Caution! Use of this command requires knowledge of the numeric enumeration value of the parameter.
-	MAV_CMD_DO_SET_RELAY = 181, //	Set a relay to a condition.
-	MAV_CMD_DO_REPEAT_RELAY	= 182, //Cycle a relay on and off for a desired number of cyles with a desired period.
-	MAV_CMD_DO_SET_SERVO = 183,	//Set a servo to a desired PWM value.
-	MAV_CMD_DO_REPEAT_SERVO = 184 //Cycle a between its nominal setting and a desired PWM for a desired number of cyles with a desired period.
+	//MAV_CMD_CONDITION_DELAY = 112,	//Delay mission state machine.
+	//MAV_CMD_DO_JUMP	= 177, //Jump to the desired command in the mission list. Repeat this action only the specified number of times
+	MAV_CMD_DO_START_SEARCH = 237,
+	MAV_CMD_DO_FINISH_SEARCH = 238,
+	MAV_CMD_DO_SEND_MESSAGE = 239
 };
-*/
+
 
 PX_WAYPOINTPLANNER_STATES current_state = PX_WPP_IDLE;
 uint16_t protocol_current_wp_id = 0;
@@ -345,6 +334,23 @@ float distanceToPoint(float x, float y, float z)
     return (C-A).length();
 }
 
+void* search_thread_func (gpointer lcm_ptr)
+{
+	while (1)
+	{
+		if (cur_dest.x == 0)
+		{
+			search_success = true;
+			search_success_pos = last_known_pos;
+			search_success_att = last_known_att;
+			printf("Found!\n");
+			break;
+		}
+		usleep(paramClient->getParamValue("PROTDELAY")); //Reasonable length of this delay is yet to be found.
+	}
+	return NULL;
+}
+
 void handle_waypoint (uint16_t seq, uint64_t now)
 {
 	//if (debug) printf("Started executing waypoint(%u)...\n",seq);
@@ -532,7 +538,97 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    {
 	    	break;
 	    }
+	    case MAV_CMD_DO_START_SEARCH:
+	    {
+	    	if( !g_thread_supported() )
+	    	{
+	    		g_thread_init(NULL); // Only initialize g thread if not already done
+	    	}
+	    	gpointer ptr = NULL;
+	    	GThread* search_thread = NULL;
+	    	if( (search_thread = g_thread_create(search_thread_func, ptr, TRUE, &error)) == NULL)
+	    	{
+	    		printf("Thread creation failed: %s!!\n", error->message );
+	    		g_error_free ( error ) ;
+	    	}
+	    	if (verbose) printf("Search thread created!\n");
+	    	if(cur_wp->autocontinue == true){
+	    	current_active_wp_id++;
+			cur_wp->current = false;
+			send_waypoint_current(current_active_wp_id);
+			waypoints->at(current_active_wp_id)->current = true;
+	    	}
+	    	break;
+	    }
+	    case MAV_CMD_DO_FINISH_SEARCH:
+	    {
+	    	uint16_t next_wp = 0;
+			if (cur_wp->param3 > 0)
+			{
+				cur_wp->param3 = cur_wp->param3 - 1;
 
+		    	if (cur_wp->param1 < waypoints->size() && cur_wp->param2 < waypoints->size())
+		    	{
+			    	if (search_success == true){
+			    		next_wp = cur_wp->param1;
+			    		if (verbose) printf("The search was successful! Proceeding to waypoint %u\n",next_wp);
+			    	}
+			    	else
+			    	{
+			    		next_wp = cur_wp->param2;
+			    		if (verbose) printf("The search was not successful. Proceeding to waypoint %u\n",next_wp);
+			    	}
+		    	}
+		    	else
+		    	{
+		    		if (seq + 1 < waypoints->size()){
+		    			next_wp = seq + 1;
+		    		}
+		    		else {
+		    			next_wp = seq;
+		    		}
+		    		cur_wp->autocontinue = false;
+		    		printf("Invalid parameters for MAV_CMD_DO_FINISH_SEARCH waypoint. Next waypoint is set to %u. Autocontinue turned off. \n",next_wp);
+		    	}
+			}
+			else
+			{
+	    		if (seq + 1 < waypoints->size()){
+	    			next_wp = seq + 1;
+	    		}
+	    		else {
+	    			next_wp = seq;
+	    		}
+			}
+
+	    	if(cur_wp->autocontinue == true){
+	    	current_active_wp_id = next_wp;
+			cur_wp->current = false;
+			send_waypoint_current(current_active_wp_id);
+			waypoints->at(current_active_wp_id)->current = true;
+	    	}
+
+	    	break;
+	    }
+	    case MAV_CMD_DO_SEND_MESSAGE:
+	    {
+	    	mavlink_message_t msg;
+	    	mavlink_statustext_t stext;
+
+	    	uint16_t some_nr = 13;
+
+	    	stext.severity = 0;
+	    	sprintf((char*)&stext.text,"Some very important message: %u",some_nr);
+	    	mavlink_msg_statustext_encode(systemid, compid, &msg, &stext);
+	    	mavlink_message_t_publish(lcm, "MAVLINK", &msg);
+	    	if(cur_wp->autocontinue == true){
+	    	current_active_wp_id++;
+			cur_wp->current = false;
+			send_waypoint_current(current_active_wp_id);
+			waypoints->at(current_active_wp_id)->current = true;
+	    	}
+	    	break;
+	    }
 	    }
 	}
 
@@ -1090,7 +1186,7 @@ int main(int argc, char* argv[])
 		g_thread_init(NULL);
 		// Only initialize g thread if not already done
 	}
-	GError *error = NULL;
+
 	gpointer lcm_ptr = (gpointer) lcm;
 
 	if( (waypoint_lcm_thread = g_thread_create(lcm_thread_func, lcm_ptr, TRUE, &error)) == NULL)
