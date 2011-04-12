@@ -45,6 +45,8 @@ typedef struct _mav_destination
 //==== variables for the planner ====
 bool idle = false;      				///< indicates if the system is following the waypoints or is waiting
 uint16_t current_active_wp_id = -1;		///< id of current waypoint
+uint16_t next_wp_id = -1;
+bool ready_to_continue = false;
 uint64_t timestamp_lastoutside_orbit = 0;///< timestamp when the MAV was last outside the orbit or had the wrong yaw value
 uint64_t timestamp_firstinside_orbit = 0;///< timestamp when the MAV was the first time after a waypoint change inside the orbit and had the correct yaw value
 uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay command was initiated
@@ -354,12 +356,11 @@ void* search_thread_func (gpointer lcm_ptr)
 void handle_waypoint (uint16_t seq, uint64_t now)
 {
 	//if (debug) printf("Started executing waypoint(%u)...\n",seq);
-	uint16_t old_active_wp_id = current_active_wp_id;
 
 	if (seq < waypoints->size())
 	{
 		mavlink_waypoint_t *cur_wp = waypoints->at(seq);
-
+		if (ready_to_continue == false){
 	    switch(cur_wp->command)
 	    {
 	    case MAV_CMD_NAV_WAYPOINT:
@@ -371,7 +372,7 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 
             // compare last known position with current destination
             float dist;
-            uint16_t next_wp_id = seq+1;
+            next_wp_id = seq+1;
             if (waypoints->at(seq)->param1 == 0 && next_wp_id < waypoints->size() && waypoints->at(next_wp_id)->command == MAV_CMD_NAV_WAYPOINT)
             {
             	//if (debug) printf("Both current and next waypoint (%u) are MAV_CMD_NAV_WAYPOINT. Using distanceToSegment.\n", next_wp_id);
@@ -420,23 +421,8 @@ void handle_waypoint (uint16_t seq, uint64_t now)
             	// check if the MAV was long enough inside the waypoint orbit
 	            if(now-timestamp_firstinside_orbit >= cur_wp->param1*1000000)
 	            {
-	                if (cur_wp->autocontinue)
-	                {
-	                    cur_wp->current = false;
-	                    if ((uint16_t)(seq + 1) < waypoints->size())
-	                    {
-	                    	current_active_wp_id = seq + 1;
-   	                    	// Proceed to next waypoint
-    	                    timestamp_firstinside_orbit = 0;
-    	                    send_waypoint_current(current_active_wp_id);
-    	                    waypoints->at(current_active_wp_id)->current = true;
-    	                    if (verbose) printf("Set new waypoint (%u)\n", current_active_wp_id);
-	                    }
-	                    else //the end of waypoint list is reached.
-	                    {
-	                    	if (verbose) printf("Reached the end of the list.\n");
-	                    }
-	                }
+	            	ready_to_continue = true;
+	            	timestamp_firstinside_orbit = 0;
 	            }
     	    }
     	    else
@@ -444,7 +430,6 @@ void handle_waypoint (uint16_t seq, uint64_t now)
     	        timestamp_lastoutside_orbit = now;
     	    }
     	    break;
-
 	    }
 	    case MAV_CMD_NAV_LOITER_UNLIM:
 	    	break;
@@ -471,14 +456,12 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    				printf("Warning: Delay shorter than HANDLEWPDELAY parameter (%.2f sec)!\n", paramClient->getParamValue("HANDLEWPDELAY"));
 	    			}
 	    	}
-	    	if (now - timestamp_delay_started >= cur_wp->param1*1000000 && cur_wp->autocontinue == true)
+	    	if (now - timestamp_delay_started >= cur_wp->param1*1000000)
 	    	{
 	    		timestamp_delay_started = 0;
-	    		current_active_wp_id++;
-	    		if (verbose) printf("... delay finished. Proceed to next waypoint.\n");
-				cur_wp->current = false;
-				send_waypoint_current(current_active_wp_id);
-				waypoints->at(current_active_wp_id)->current = true;
+	    		next_wp_id = seq + 1;
+				ready_to_continue = true;
+				if (verbose) printf("... delay finished. Proceed to next waypoint.\n");
 	    	}
 	    	else
 	    	{
@@ -496,30 +479,18 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    	break;
 	    case MAV_CMD_DO_JUMP:
 	    {
-			if (cur_wp->autocontinue)
+			if (cur_wp->param2 > 0)
 			{
-				if (cur_wp->param2 > 0)
-				{
-					cur_wp->param2 = cur_wp->param2 - 1;
-					if (verbose) printf("Jump from waypoint %u to waypoint %u. %u jumps left\n", current_active_wp_id, (uint32_t) cur_wp->param1, (uint32_t) cur_wp->param2);
-					current_active_wp_id = cur_wp->param1;
-				}
-				else
-				{
-					if ((uint16_t)(current_active_wp_id + 1) < waypoints->size())
-                    {
-                        current_active_wp_id++;
-                        if (verbose) printf("Jump command not performed: jump limit reached. Proceed to next waypoint\n");
-                    }
-					else
-					{
-						if (verbose) printf("Jump command not performed: jump limit reached. Terminal waypoint reached\n");
-					}
-				}
-				cur_wp->current = false;
-				waypoints->at(current_active_wp_id)->current = true;
-				send_waypoint_current(current_active_wp_id);
+				cur_wp->param2 = cur_wp->param2 - 1;
+				if (verbose) printf("Jump from waypoint %u to waypoint %u. %u jumps left\n", current_active_wp_id, (uint32_t) cur_wp->param1, (uint32_t) cur_wp->param2);
+				next_wp_id = cur_wp->param1;
 			}
+			else
+			{
+				next_wp_id = seq + 1;
+                if (verbose) printf("Jump command not performed: jump limit reached. Proceed to next waypoint\n");
+			}
+			ready_to_continue = true;
 			break;
 	    }
 	    case MAV_CMD_DO_CHANGE_SPEED:
@@ -552,17 +523,12 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    		g_error_free ( error ) ;
 	    	}
 	    	if (verbose) printf("Search thread created!\n");
-	    	if(cur_wp->autocontinue == true){
-	    	current_active_wp_id++;
-			cur_wp->current = false;
-			send_waypoint_current(current_active_wp_id);
-			waypoints->at(current_active_wp_id)->current = true;
-	    	}
+	    	next_wp_id = seq + 1;
+	    	ready_to_continue = true;
 	    	break;
 	    }
 	    case MAV_CMD_DO_FINISH_SEARCH:
 	    {
-	    	uint16_t next_wp = 0;
 			if (cur_wp->param3 > 0)
 			{
 				cur_wp->param3 = cur_wp->param3 - 1;
@@ -570,44 +536,27 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 		    	if (cur_wp->param1 < waypoints->size() && cur_wp->param2 < waypoints->size())
 		    	{
 			    	if (search_success == true){
-			    		next_wp = cur_wp->param1;
-			    		if (verbose) printf("The search was successful! Proceeding to waypoint %u\n",next_wp);
+			    		next_wp_id = cur_wp->param1;
+			    		if (verbose) printf("The search was successful! Proceeding to waypoint %u\n",next_wp_id);
 			    	}
 			    	else
 			    	{
-			    		next_wp = cur_wp->param2;
-			    		if (verbose) printf("The search was not successful. Proceeding to waypoint %u\n",next_wp);
+			    		next_wp_id = cur_wp->param2;
+			    		if (verbose) printf("The search was not successful. Proceeding to waypoint %u\n",next_wp_id);
 			    	}
 		    	}
 		    	else
 		    	{
-		    		if (seq + 1 < waypoints->size()){
-		    			next_wp = seq + 1;
-		    		}
-		    		else {
-		    			next_wp = seq;
-		    		}
+		    		next_wp_id = seq + 1;
 		    		cur_wp->autocontinue = false;
-		    		printf("Invalid parameters for MAV_CMD_DO_FINISH_SEARCH waypoint. Next waypoint is set to %u. Autocontinue turned off. \n",next_wp);
+		    		printf("Invalid parameters for MAV_CMD_DO_FINISH_SEARCH waypoint. Next waypoint is set to %u. Autocontinue turned off. \n",next_wp_id);
 		    	}
 			}
 			else
 			{
-	    		if (seq + 1 < waypoints->size()){
-	    			next_wp = seq + 1;
-	    		}
-	    		else {
-	    			next_wp = seq;
-	    		}
+	    		next_wp_id = seq + 1;
 			}
-
-	    	if(cur_wp->autocontinue == true){
-	    	current_active_wp_id = next_wp;
-			cur_wp->current = false;
-			send_waypoint_current(current_active_wp_id);
-			waypoints->at(current_active_wp_id)->current = true;
-	    	}
-
+			ready_to_continue = true;
 	    	break;
 	    }
 	    case MAV_CMD_DO_SEND_MESSAGE:
@@ -621,30 +570,51 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    	sprintf((char*)&stext.text,"Some very important message: %u",some_nr);
 	    	mavlink_msg_statustext_encode(systemid, compid, &msg, &stext);
 	    	mavlink_message_t_publish(lcm, "MAVLINK", &msg);
-	    	if(cur_wp->autocontinue == true){
-	    	current_active_wp_id++;
-			cur_wp->current = false;
-			send_waypoint_current(current_active_wp_id);
-			waypoints->at(current_active_wp_id)->current = true;
-	    	}
+	    	next_wp_id = seq + 1;
+	    	ready_to_continue = true;
 	    	break;
 	    }
-	    }
-	}
 
+	    }} //end switch, end if
+
+		if (ready_to_continue == true)
+		{
+			if (cur_wp->autocontinue)
+		    {
+				//if (verbose) printf("check current (%u) next (%u) size (%u) \n", current_active_wp_id, next_wp_id, waypoints->size());
+		        if (next_wp_id < waypoints->size())
+		        {
+			        cur_wp->current = false;
+			        ready_to_continue = false;
+		        	current_active_wp_id = next_wp_id;
+		        	next_wp_id = -1;
+		           	// Proceed to next waypoint
+		            send_waypoint_current(current_active_wp_id);
+		            waypoints->at(current_active_wp_id)->current = true;
+		            if (verbose) printf("Set new waypoint (%u)\n", current_active_wp_id);
+		            //Waypoint changed, execute next waypoint at once. Warning: recursion!!!
+		            handle_waypoint(current_active_wp_id,now);
+		        }
+		        else //the end of waypoint list is reached.
+		        {
+		        	if (verbose) printf("Reached the end of the list.\n");
+		        }
+		    }
+			else
+			{
+				if (verbose) printf("New waypoint (%u) has been set. Waiting for autocontinue...\n", next_wp_id);
+			}
+		}
+
+	}
 	else
 	{
 		if (verbose) printf("Waypoint %u is out of bounds. Currently have %u waypoints.\n", seq, (uint16_t)waypoints->size());
 	}
 
-	if (current_active_wp_id != old_active_wp_id)
-	{
-		//Waypoint changed, execute next waypoint at once. Warning: recursion!!!
-		if (verbose) printf("Executing commands of the new waypoint(%u)...\n",current_active_wp_id);
-		handle_waypoint(current_active_wp_id,now);
-	}
-	timestamp_last_handle_waypoint = now;
 	//if (debug) printf("Finished executing waypoint(%u)...\n",seq);
+	timestamp_last_handle_waypoint = now;
+
 }
 
 static void handle_communication (const mavlink_message_t* msg, uint64_t now)
@@ -702,6 +672,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                        }
 	                        if (verbose) printf("New current waypoint %u\n", current_active_wp_id);
 	                        send_waypoint_current(current_active_wp_id);
+	                        ready_to_continue = false;
 	                        handle_waypoint(current_active_wp_id,now);
 	                        send_setpoint();
 	                        timestamp_firstinside_orbit = 0;
@@ -902,6 +873,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                                current_active_wp_id = i;
 	                                //if (verbose) printf("New current waypoint %u\n", current_active_wp_id);
 	                                send_waypoint_current(current_active_wp_id);
+	                                ready_to_continue = false;
 	                                handle_waypoint(current_active_wp_id,now);
 	                                send_setpoint();
 	                                timestamp_firstinside_orbit = 0;
@@ -1328,7 +1300,7 @@ int main(int argc, char* argv[])
 
         // resend current destination every "SETPOINTDELAY" seconds
         g_static_mutex_lock(main_mutex);
-        if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
+        if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000) //&& current_active_wp_id != (uint16_t)-1)
         {
             send_setpoint();
         }
