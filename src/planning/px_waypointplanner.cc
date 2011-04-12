@@ -51,9 +51,11 @@ uint64_t timestamp_lastoutside_orbit = 0;///< timestamp when the MAV was last ou
 uint64_t timestamp_firstinside_orbit = 0;///< timestamp when the MAV was the first time after a waypoint change inside the orbit and had the correct yaw value
 uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay command was initiated
 
-uint16_t search_success = false; ///< variable for testing search waypoint commands
+bool search_success = false; ///< variable for testing search waypoint commands
 mavlink_local_position_t search_success_pos; ///< position of MAV when it succeeded in search
 mavlink_attitude_t search_success_att;		 ///< attitude of MAV when it succeeded in search
+uint16_t npic = 0;						     ///< number of times the picture has been detected
+//static GString* SEARCH_PIC = g_string_new("media/sweep_images/mona.jpg");	///< relative path of the search image
 
 mav_destination cur_dest;				 ///< current flight destination
 mavlink_local_position_t last_known_pos; ///< latest received position of MAV
@@ -338,6 +340,26 @@ float distanceToPoint(float x, float y, float z)
 
 void* search_thread_func (gpointer lcm_ptr)
 {
+
+	while (1)
+	{
+		if (npic>=1)
+		{
+			search_success = true;
+			search_success_pos = last_known_pos;
+			search_success_att = last_known_att;
+			break;
+		}
+		usleep(1000);
+	}
+	return NULL;
+}
+
+
+
+/*
+void* search_thread_func (gpointer lcm_ptr)
+{
 	while (1)
 	{
 		if (cur_dest.x == 0)
@@ -352,7 +374,7 @@ void* search_thread_func (gpointer lcm_ptr)
 	}
 	return NULL;
 }
-
+*/
 void handle_waypoint (uint16_t seq, uint64_t now)
 {
 	//if (debug) printf("Started executing waypoint(%u)...\n",seq);
@@ -997,6 +1019,19 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            }
 	            break;
 	        }
+	    case MAVLINK_MSG_ID_PATTERN_DETECTED:
+			{
+				GString* SEARCH_PIC = g_string_new("media/sweep_images/mona.jpg");
+				mavlink_pattern_detected_t pd;
+				mavlink_msg_pattern_detected_decode(msg, &pd);
+				//printf("Pattern - conf: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
+
+				if(pd.detected==1 && strcmp((char*)pd.file,SEARCH_PIC->str) == 0) {
+					++npic;
+					if(debug) printf("Found it! - confidence: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
+				}
+				break;
+			}
 
 	    case MAVLINK_MSG_ID_ACTION: // special action from ground station
 	        {
@@ -1095,7 +1130,6 @@ int main(int argc, char* argv[])
 *  The function parses for program options, sets up some example waypoints and connects to IPC
 */
 {
-
 	std::string waypointfile;
     config::options_description desc("Allowed options");
     desc.add_options()
