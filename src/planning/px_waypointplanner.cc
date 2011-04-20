@@ -54,7 +54,8 @@ uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay com
 bool search_success = false; ///< variable for testing search waypoint commands
 mavlink_local_position_t search_success_pos; ///< position of MAV when it succeeded in search
 mavlink_attitude_t search_success_att;		 ///< attitude of MAV when it succeeded in search
-uint16_t npic = 0;						     ///< number of times the picture has been detected
+uint16_t npic = 0;	                         ///< number of times the picture has been detected
+float min_conf = 1.0;                        ///< minimum confidence for pattern to be detected successfully
 //static GString* SEARCH_PIC = g_string_new("media/sweep_images/mona.jpg");	///< relative path of the search image
 
 mav_destination cur_dest;				 ///< current flight destination
@@ -356,25 +357,6 @@ void* search_thread_func (gpointer lcm_ptr)
 }
 
 
-
-/*
-void* search_thread_func (gpointer lcm_ptr)
-{
-	while (1)
-	{
-		if (cur_dest.x == 0)
-		{
-			search_success = true;
-			search_success_pos = last_known_pos;
-			search_success_att = last_known_att;
-			printf("Found!\n");
-			break;
-		}
-		usleep(paramClient->getParamValue("PROTDELAY")); //Reasonable length of this delay is yet to be found.
-	}
-	return NULL;
-}
-*/
 void handle_waypoint (uint16_t seq, uint64_t now)
 {
 	//if (debug) printf("Started executing waypoint(%u)...\n",seq);
@@ -545,6 +527,9 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    		g_error_free ( error ) ;
 	    	}
 	    	if (verbose) printf("Search thread created!\n");
+
+	    	min_conf = cur_wp->param1; // setting minimal confidence
+
 	    	next_wp_id = seq + 1;
 	    	ready_to_continue = true;
 	    	break;
@@ -1021,14 +1006,14 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	        }
 	    case MAVLINK_MSG_ID_PATTERN_DETECTED:
 			{
-				GString* SEARCH_PIC = g_string_new("media/sweep_images/mona.jpg");
+				GString* SEARCH_PIC = g_string_new("./media/sweep_images/mona.jpg");
 				mavlink_pattern_detected_t pd;
 				mavlink_msg_pattern_detected_decode(msg, &pd);
 				//printf("Pattern - conf: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
 
-				if(pd.detected==1 && strcmp((char*)pd.file,SEARCH_PIC->str) == 0) {
+				if(pd.detected==1 && strcmp((char*)pd.file,SEARCH_PIC->str) == 0 && pd.confidence >= min_conf) {
 					++npic;
-					if(debug) printf("Found it! - confidence: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
+					if(verbose) printf("Found it! - confidence: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
 				}
 				break;
 			}
@@ -1334,7 +1319,7 @@ int main(int argc, char* argv[])
 
         // resend current destination every "SETPOINTDELAY" seconds
         g_static_mutex_lock(main_mutex);
-        if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000) //&& current_active_wp_id != (uint16_t)-1)
+        if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
         {
             send_setpoint();
         }
