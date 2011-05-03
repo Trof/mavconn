@@ -51,16 +51,16 @@ uint64_t timestamp_lastoutside_orbit = 0;///< timestamp when the MAV was last ou
 uint64_t timestamp_firstinside_orbit = 0;///< timestamp when the MAV was the first time after a waypoint change inside the orbit and had the correct yaw value
 uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay command was initiated
 
-bool search_success = false; ///< variable for testing search waypoint commands
+
 mavlink_local_position_t search_success_pos; ///< position of MAV when it succeeded in search
 mavlink_attitude_t search_success_att;		 ///< attitude of MAV when it succeeded in search
-uint16_t npic = 0;	                         ///< number of times the picture has been detected
-float min_conf = 1.0;                        ///< minimum confidence for pattern to be detected successfully
+float min_conf = 0;                        ///< minimum confidence for pattern to be detected successfully.
 //static GString* SEARCH_PIC = g_string_new("media/sweep_images/mona.jpg");	///< relative path of the search image
 
 mav_destination cur_dest;				 ///< current flight destination
 mavlink_local_position_t last_known_pos; ///< latest received position of MAV
 mavlink_attitude_t last_known_att;		 ///< latest received attitude of MAV
+mavlink_pattern_detected_t last_detected_pattern; ///< latest successful pattern detection
 
 std::vector<mavlink_waypoint_t*> waypoints1;	///< vector1 that holds the waypoints
 std::vector<mavlink_waypoint_t*> waypoints2;	///< vector2 that holds the waypoints
@@ -89,6 +89,13 @@ enum PX_WAYPOINTPLANNER_STATES
     PX_WPP_GETLIST_GOTALL
 };
 
+enum PX_WAYPOINTPLANNER_SEARCH_STATES
+{
+	PX_WPP_SEARCH_IDLE = 0,
+	PX_WPP_SEARCH_RUNNING,
+	PX_WPP_SEARCH_SUCCESS,
+	PX_WPP_SEARCH_PATTERN_DETECTED
+};
 
 enum MAV_CMD_ID
 {
@@ -102,6 +109,7 @@ enum MAV_CMD_ID
 
 
 PX_WAYPOINTPLANNER_STATES current_state = PX_WPP_IDLE;
+PX_WAYPOINTPLANNER_SEARCH_STATES search_state = PX_WPP_SEARCH_IDLE;
 uint16_t protocol_current_wp_id = 0;
 uint16_t protocol_current_count = 0;
 uint8_t protocol_current_partner_systemid = 0;
@@ -339,18 +347,36 @@ float distanceToPoint(float x, float y, float z)
     return (C-A).length();
 }
 
-void* search_thread_func (gpointer lcm_ptr)
+void* search_thread_func (gpointer n_det)
 {
-
+	uint16_t npic = 0;	                         ///< number of times the picture has been detected
+	float best_conf = 0;
+	search_state = PX_WPP_SEARCH_RUNNING;
+	int16_t* n_det_ = (int16_t*) n_det; //specifies the number of detections needed for success of the search
+	int16_t detections_needed = *n_det_;
+	if (verbose) printf("here %u.\n", detections_needed);
 	while (1)
 	{
-		if (npic>=1)
+		if (search_state == PX_WPP_SEARCH_PATTERN_DETECTED)
 		{
-			search_success = true;
-			search_success_pos = last_known_pos;
-			search_success_att = last_known_att;
-			break;
+			npic++;
+			if (last_detected_pattern.confidence >= best_conf)
+			{
+				best_conf = last_detected_pattern.confidence;
+				search_success_pos = last_known_pos;
+				search_success_att = last_known_att;
+			}
+
+			if (debug) printf("npic = %u. det_need = %u\n",npic,detections_needed);
+
+			if (npic >= detections_needed)
+			{
+				if (verbose) printf("Search finished successfully! Best detection happened at position (%.2f,%.2f) with confidence %f\n",search_success_pos.x,search_success_pos.y, best_conf);
+				search_state = PX_WPP_SEARCH_SUCCESS;
+				break;
+			}
 		}
+		search_state = PX_WPP_SEARCH_RUNNING;
 		usleep(1000);
 	}
 	return NULL;
@@ -515,54 +541,77 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    }
 	    case MAV_CMD_DO_START_SEARCH:
 	    {
-	    	if( !g_thread_supported() )
-	    	{
-	    		g_thread_init(NULL); // Only initialize g thread if not already done
-	    	}
-	    	gpointer ptr = NULL;
-	    	GThread* search_thread = NULL;
-	    	if( (search_thread = g_thread_create(search_thread_func, ptr, TRUE, &error)) == NULL)
-	    	{
-	    		printf("Thread creation failed: %s!!\n", error->message );
-	    		g_error_free ( error ) ;
-	    	}
-	    	if (verbose) printf("Search thread created!\n");
-
 	    	min_conf = cur_wp->param1; // setting minimal confidence
+	    	if (search_state == PX_WPP_SEARCH_IDLE)
+	    	{
+		    	if( !g_thread_supported() )
+		    	{
+		    		g_thread_init(NULL); // Only initialize g thread if not already done
+		    	}
 
+		    	int16_t detections_needed = (int16_t) cur_wp->param2;
+	    		int16_t default_value = 1;
+	    		gpointer ptr = (gpointer) &default_value;
+		    	if (detections_needed > 0)
+		    	{
+		    		ptr = (gpointer) &detections_needed;
+		    	}
+
+		    	GThread* search_thread = NULL;
+		    	if( (search_thread = g_thread_create(search_thread_func, ptr, TRUE, &error)) == NULL)
+		    	{
+		    		printf("Thread creation failed: %s!!\n", error->message );
+		    		g_error_free ( error ) ;
+		    	}
+		    	if (verbose) printf("Search thread created!\n");
+	    	}
+	    	else
+	    	{
+	    		if (verbose) printf("Another search already running! No new thread created. Minimal needed confidence set to %f\n",min_conf);
+	    	}
 	    	next_wp_id = seq + 1;
 	    	ready_to_continue = true;
 	    	break;
 	    }
 	    case MAV_CMD_DO_FINISH_SEARCH:
 	    {
-			if (cur_wp->param3 > 0)
-			{
-				cur_wp->param3 = cur_wp->param3 - 1;
+	    	if (search_state != PX_WPP_SEARCH_IDLE)
+	    	{
+				if (cur_wp->param3 > 0)
+				{
+					cur_wp->param3 = cur_wp->param3 - 1;
 
-		    	if (cur_wp->param1 < waypoints->size() && cur_wp->param2 < waypoints->size())
-		    	{
-			    	if (search_success == true){
-			    		next_wp_id = cur_wp->param1;
-			    		if (verbose) printf("The search was successful! Proceeding to waypoint %u\n",next_wp_id);
+			    	if (cur_wp->param1 < waypoints->size() && cur_wp->param2 < waypoints->size())
+			    	{
+				    	if (search_state == PX_WPP_SEARCH_SUCCESS)
+				    	{
+				    		next_wp_id = cur_wp->param1;
+				    		if (verbose) printf("Search successful! Proceeding to waypoint %u\n",next_wp_id);
+				    	}
+				    	else
+				    	{
+				    		next_wp_id = cur_wp->param2;
+				    		if (verbose) printf("Search failed. Proceeding to waypoint %u\n",next_wp_id);
+				    	}
 			    	}
 			    	else
 			    	{
-			    		next_wp_id = cur_wp->param2;
-			    		if (verbose) printf("The search was not successful. Proceeding to waypoint %u\n",next_wp_id);
+			    		next_wp_id = seq + 1;
+			    		cur_wp->autocontinue = false;
+			    		printf("Invalid parameters for MAV_CMD_DO_FINISH_SEARCH waypoint. Next waypoint is set to %u. Autocontinue turned off. \n",next_wp_id);
 			    	}
-		    	}
-		    	else
-		    	{
+				}
+				else
+				{
 		    		next_wp_id = seq + 1;
-		    		cur_wp->autocontinue = false;
-		    		printf("Invalid parameters for MAV_CMD_DO_FINISH_SEARCH waypoint. Next waypoint is set to %u. Autocontinue turned off. \n",next_wp_id);
-		    	}
-			}
-			else
-			{
-	    		next_wp_id = seq + 1;
-			}
+				}
+	    	}
+	    	else
+	    	{
+	    		next_wp_id = seq+1;
+	    		printf("No active search found! Please add MAV_CMD_DO_START_SEARCH waypoint before this one. Proceeding to the next waypoint %u.\n",next_wp_id);
+	    	}
+
 			ready_to_continue = true;
 	    	break;
 	    }
@@ -1006,15 +1055,22 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	        }
 	    case MAVLINK_MSG_ID_PATTERN_DETECTED:
 			{
-				GString* SEARCH_PIC = g_string_new("./media/sweep_images/mona.jpg");
 				mavlink_pattern_detected_t pd;
 				mavlink_msg_pattern_detected_decode(msg, &pd);
 				//printf("Pattern - conf: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
 
-				if(pd.detected==1 && strcmp((char*)pd.file,SEARCH_PIC->str) == 0 && pd.confidence >= min_conf) {
-					++npic;
-					if(verbose) printf("Found it! - confidence: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
+				if (search_state == PX_WPP_SEARCH_RUNNING)
+				{
+					GString* SEARCH_PIC = g_string_new("./media/sweep_images/mona.jpg");
+					if(pd.detected==1 && strcmp((char*)pd.file,SEARCH_PIC->str) == 0 && pd.confidence >= min_conf)
+					{
+						last_detected_pattern = pd;
+						search_state = PX_WPP_SEARCH_PATTERN_DETECTED;
+						if(verbose) printf("Found it! - confidence: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
+					}
 				}
+
+
 				break;
 			}
 
