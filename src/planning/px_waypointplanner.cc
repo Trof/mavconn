@@ -1369,17 +1369,14 @@ int main(int argc, char* argv[])
     **********************************/
     while (1)//need some break condition, e.g. if LCM fails
     {
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
-
-        // resend current destination every "SETPOINTDELAY" seconds
-        g_static_mutex_lock(main_mutex);
-        if(now-timestamp_last_send_setpoint > paramClient->getParamValue("SETPOINTDELAY")*1000000 && current_active_wp_id != (uint16_t)-1)
+    	g_static_mutex_lock(main_mutex);
+        if(current_active_wp_id != (uint16_t)-1)
         {
             send_setpoint();
         }
         g_static_mutex_unlock(main_mutex);
+        usleep(paramClient->getParamValue("SETPOINTDELAY")*1000000);
+
     }
 
     /**********************************
