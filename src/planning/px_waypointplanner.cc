@@ -97,8 +97,10 @@ enum PX_WAYPOINTPLANNER_SEARCH_STATES
 	PX_WPP_SEARCH_PATTERN_DETECTED
 };
 
-enum MAV_CMD_ID
+enum PX_WAYPOINT_CMD_ID
 {
+	//These are unofficial waypoint types, defined especially for PixHawk project
+
 	//MAV_CMD_NAV_WAYPOINT = 16,     //Navigate to waypoint
 	//MAV_CMD_CONDITION_DELAY = 112,	//Delay mission state machine.
 	//MAV_CMD_DO_JUMP	= 177, //Jump to the desired command in the mission list. Repeat this action only the specified number of times
@@ -107,6 +109,13 @@ enum MAV_CMD_ID
 	MAV_CMD_DO_SEND_MESSAGE = 239
 };
 
+enum PX_CMD_MESSAGE_ID
+{
+	//These are unofficial id's of Command(#75) mavlink message
+
+	CMD_SET_AUTOCONTINUE = 50
+
+};
 
 PX_WAYPOINTPLANNER_STATES current_state = PX_WPP_IDLE;
 PX_WAYPOINTPLANNER_SEARCH_STATES search_state = PX_WPP_SEARCH_IDLE;
@@ -137,6 +146,28 @@ void send_waypoint_ack(uint8_t target_systemid, uint8_t target_compid, uint8_t t
     usleep(paramClient->getParamValue("PROTDELAY"));
 
     if (verbose) printf("Sent waypoint ack (%u) to ID %u\n", wpa.type, wpa.target_system);
+}
+
+void send_command_ack(float feedback, uint8_t result)
+/*
+*  @brief Sends a command ack message
+*
+*  @param feedback some float value. The interpretation depends on the command
+*  @param result 0: Action ACCEPTED and EXECUTED, 1: Action TEMPORARY REJECTED/DENIED, 2: Action PERMANENTLY DENIED, 3: Action UNKNOWN/UNSUPPORTED, 4: Requesting CONFIRMATION
+*/
+{
+	mavlink_message_t msg;
+    mavlink_command_ack_t cmda;
+
+    cmda.command = feedback;
+    cmda.result = (float) result;
+
+    mavlink_msg_command_ack_encode(systemid, compid, &msg, &cmda);
+    mavlink_message_t_publish(lcm, "MAVLINK", &msg);
+
+    usleep(paramClient->getParamValue("PROTDELAY"));
+
+    if (verbose) printf("Sent command ack (%f) with feedback %f\n", cmda.result, cmda.command);
 }
 
 void send_waypoint_current(uint16_t seq)
@@ -1073,7 +1104,63 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 
 				break;
 			}
+		case MAVLINK_MSG_ID_COMMAND:
+			{
+				mavlink_command_t command;
+				mavlink_msg_command_decode(msg, &command);
 
+
+	            if(command.target_system == systemid && command.target_component == compid)
+	            {
+	                protocol_timestamp_lastaction = now;
+
+	                if (current_state == PX_WPP_IDLE)
+	                {
+	    				switch (command.command)
+	    				{
+	    				case CMD_SET_AUTOCONTINUE:
+	    					{
+	    						uint8_t wp_id = (uint8_t) command.param1;
+	    						if (wp_id < waypoints->size())
+	    						{
+		    						uint8_t new_autocontinue_value = (uint8_t) command.param2;
+		    						if (new_autocontinue_value == 0)
+		    						{
+		    							waypoints->at(wp_id)->autocontinue = false;
+		    							send_command_ack(0,0);
+		    						}
+		    						else if (new_autocontinue_value == 1)
+		    						{
+		    							waypoints->at(wp_id)->autocontinue = true;
+		    							send_command_ack(1,0);
+		    						}
+		    						else
+		    						{
+		    							if (debug) std::cerr << "Waypointplanner: CMD_SET_AUTOCONTINUE command must have param2 value of 0 or 1" << std::endl;
+		    							send_command_ack(0,2);
+		    						}
+	    						}
+	    						else
+	    						{
+	    							if (verbose) printf("Ignored MAVLINK_MSG_ID_COMMAND (CMD_SET_AUTOCONTINUE): Waypoint index out of bounds\n");
+	    							send_command_ack(0,2);
+	    						}
+
+	    						break;
+	    					}
+
+	    					default:
+	    					{
+	    		        		if (debug) std::cerr << "Waypointplanner: received Command message of unknown type" << std::endl;
+	    		        		send_command_ack(0,3);
+	    		            	break;
+	    		        	}
+	    				}
+	                }
+	            }
+
+				break;
+			}
 	    case MAVLINK_MSG_ID_ACTION: // special action from ground station
 	        {
 	            mavlink_action_t action;
