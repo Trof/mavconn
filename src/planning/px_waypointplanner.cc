@@ -39,8 +39,26 @@ typedef struct _mav_destination
 	float z; //local: z position, global: altitude
 	float yaw; //Yaw orientation in degrees, [0..360] 0 = NORTH
 	float rad; //Radius in which the destination counts as reached
+	float holdtime;
 } mav_destination;
 
+typedef struct _sweep_parameters
+{
+	float z; // Height of sweep flight
+	float r; // Radius of area on the ground, that is visible while MAV floats at fixed position at height z. Should be large for high altitude and/or broad camera viewing angle.
+
+	float x0; // (x,y)-coordinates of the corner of the sweep area rectangle, where the sweep starts;
+	float y0;
+
+	float long_side; // length of a longer side of the rectangle
+	float short_side; // length of a shorter side of the rectangle
+	float d; // = long_side - 2*r; Not required, but introduced for shorter notation
+
+	float u1; // (u1,v1) is a unit vector that points from corner 0 to corner 2 (direction of long side)
+	float v1;
+	float u2; // (u2,v2) is a unit vector that points from corner 0 to corner 1 (direction of short side)
+	float v2;
+} sweep_parameters;
 
 //==== variables for the planner ====
 bool idle = false;      				///< indicates if the system is following the waypoints or is waiting
@@ -70,7 +88,9 @@ std::vector<mavlink_waypoint_t*>* waypoints_receive_buffer = &waypoints2;	///< p
 
 GError *error = NULL;
 GThread* waypoint_lcm_thread = NULL;
-static GStaticMutex *main_mutex = new GStaticMutex;
+//static GStaticMutex* main_mutex = new GStaticMutex;
+static GMutex* main_mutex = NULL;
+static GCond* cond_position_received = NULL;
 
 
 //==== variables needed for communication protocol ====
@@ -97,16 +117,20 @@ enum PX_WAYPOINTPLANNER_SEARCH_STATES
 	PX_WPP_SEARCH_PATTERN_DETECTED
 };
 
+enum PX_WAYPOINTPLANNER_SWEEP_STATES
+{
+	PX_WPP_SWEEP_IDLE = 0,
+	PX_WPP_SWEEP_RUNNING,
+	PX_WPP_SWEEP_FINISHED
+};
+
 enum PX_WAYPOINT_CMD_ID
 {
 	//These are unofficial waypoint types, defined especially for PixHawk project
-
-	//MAV_CMD_NAV_WAYPOINT = 16,     //Navigate to waypoint
-	//MAV_CMD_CONDITION_DELAY = 112,	//Delay mission state machine.
-	//MAV_CMD_DO_JUMP	= 177, //Jump to the desired command in the mission list. Repeat this action only the specified number of times
 	MAV_CMD_DO_START_SEARCH = 237,
 	MAV_CMD_DO_FINISH_SEARCH = 238,
-	MAV_CMD_DO_SEND_MESSAGE = 239
+	MAV_CMD_DO_SEND_MESSAGE = 239,
+	MAV_CMD_DO_SWEEP = 240
 };
 
 enum PX_CMD_MESSAGE_ID
@@ -119,6 +143,7 @@ enum PX_CMD_MESSAGE_ID
 
 PX_WAYPOINTPLANNER_STATES current_state = PX_WPP_IDLE;
 PX_WAYPOINTPLANNER_SEARCH_STATES search_state = PX_WPP_SEARCH_IDLE;
+PX_WAYPOINTPLANNER_SWEEP_STATES sweep_state = PX_WPP_SWEEP_IDLE;
 uint16_t protocol_current_wp_id = 0;
 uint16_t protocol_current_count = 0;
 uint8_t protocol_current_partner_systemid = 0;
@@ -330,12 +355,13 @@ void set_destination(mavlink_waypoint_t* wp)
 	cur_dest.z = wp->z;
 	cur_dest.yaw = wp->param4;
 	cur_dest.rad = wp->param2;
-
+	cur_dest.holdtime = wp->param1;
 	if(wp->command != MAV_CMD_NAV_WAYPOINT)
 	{
 		if (verbose) printf("Warning: New destination coordinates do not origin from MAV_CMD_NAV_WAYPOINT waypoint.\n");
 	}
 }
+
 
 float distanceToSegment(float x, float y, float z , uint16_t next_NAV_wp_id)
 {
@@ -378,6 +404,140 @@ float distanceToPoint(float x, float y, float z)
     return (C-A).length();
 }
 
+void check_if_reached_dest(bool* posReached, bool* yawReached, uint16_t next_wp_id)
+{
+	float dist;
+	if (cur_dest.holdtime == 0 && next_wp_id < waypoints->size() && waypoints->at(next_wp_id)->command == MAV_CMD_NAV_WAYPOINT)
+	{
+		//if (debug) printf("Both current and next waypoint (%u) are MAV_CMD_NAV_WAYPOINT. Using distanceToSegment.\n", next_wp_id);
+	    dist = distanceToSegment(last_known_pos.x, last_known_pos.y, last_known_pos.z, next_wp_id);
+	}
+	else
+	{
+	    dist = distanceToPoint(last_known_pos.x, last_known_pos.y, last_known_pos.z);
+	}
+
+	if (dist >= 0.f && dist <= cur_dest.rad)
+	{
+	    *posReached = true;
+	}
+
+	// yaw reached?
+	float yaw_tolerance = paramClient->getParamValue("YAWTOLERANCE");
+	//compare last known yaw with current desired yaw
+	if (last_known_att.yaw - yaw_tolerance >= 0.0f && last_known_att.yaw + yaw_tolerance < 2.f*M_PI)
+	{
+	    if (last_known_att.yaw - yaw_tolerance <= cur_dest.yaw*M_PI/180 && last_known_att.yaw + yaw_tolerance >= cur_dest.yaw*M_PI/180)
+	        *yawReached = true;
+	}
+	else if(last_known_att.yaw - yaw_tolerance < 0.0f)
+	{
+	    float lowerBound = 2.f*M_PI + last_known_att.yaw - yaw_tolerance;
+	    if (lowerBound < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < last_known_att.yaw + yaw_tolerance)
+	        *yawReached = true;
+	}
+	else
+	{
+	    float upperBound = last_known_att.yaw + yaw_tolerance - 2.f*M_PI;
+	    if (last_known_att.yaw - yaw_tolerance < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < upperBound)
+	        *yawReached = true;
+	}
+}
+
+
+uint16_t calculate_sweep_parameters (const mavlink_waypoint_t* sweep_wp, mavlink_local_position_t cur_pos, sweep_parameters* sw)
+{
+
+	float corner[4][2];
+	// Copy data from waypoint
+	corner[0][0] = sweep_wp->param3;
+	corner[0][1] = sweep_wp->param4;
+	corner[3][0] = sweep_wp->x;
+	corner[3][1] = sweep_wp->y;
+	sw->z = sweep_wp->z;
+	sw->r = sweep_wp->param1;
+
+	//sanity check
+	if (fabs(corner[0][0] - corner[3][0]) < 2*sw->r || fabs(corner[0][1] - corner[3][1]) < 2*sw->r || sw->r<=0)
+	{
+		printf("Error: Invalid sweep parameters.\n");
+		return -1;
+	}
+	// Calculate two other corners
+	corner[1][0] = corner[3][0];
+	corner[1][1] = corner[0][1];
+	corner[2][0] = corner[0][0];
+	corner[2][1] = corner[3][1];
+
+	// In the implementation above, the corners are chosen such that sides of the rectangle are parallel to the x and y axes.
+	// One additional parameter is needed to overcome this constraint (i.e. allow arbitrary orientation of rectangle).
+	// The following works for any rectangle:
+
+	uint8_t i,j;
+	float d[4];
+	uint8_t i_min;
+	float d_temp;
+	float corner_temp[2];
+
+
+	for (i=0;i<=3;i++)
+	{
+		d[i]=sqrt((cur_pos.x - corner[i][0])*(cur_pos.x - corner[i][0]) + (cur_pos.y - corner[i][1])*(cur_pos.y - corner[i][1]));
+			if (d[i]<d[i_min])
+			{
+				i_min = i;
+			}
+	}
+
+	for (i=0;i<=3;i++)
+	{
+		d[i] = sqrt((corner[i][0] - corner[i_min][0])*(corner[i][0] - corner[i_min][0]) + (corner[i][1] - corner[i_min][1])*(corner[i][1] - corner[i_min][1]));
+	}
+
+	// Sort the points such that: Point 0 is the nearest to MAV, i.e. starting point. Connection 0-3 is a diagonal, 0-2 is a longer side and 0-1 is a shorter side of the rectangle
+for (i=3;i>0;i--)
+{
+	for (j=0;j<i;j++)
+	{
+		if (d[j]>d[j+1])
+		{
+			d_temp = d[j];
+			d[j] = d[j+1];
+			d[j+1] = d_temp;
+
+			corner_temp = {corner[j][0],corner[j][1]};
+			corner[j][0] = corner[j+1][0];
+			corner[j][1] = corner[j+1][1];
+			corner[j+1][0] = corner_temp[0];
+			corner[j+1][1] = corner_temp[1];
+		}
+	}
+}
+	sw->x0 = corner[0][0];
+	sw->y0 = corner[0][1];
+
+	sw->long_side = sqrt((corner[2][0] - corner[0][0])*(corner[2][0] - corner[0][0]) + (corner[2][1] - corner[0][1])*(corner[2][1] - corner[0][1]));
+	sw->short_side = sqrt((corner[1][0] - corner[0][0])*(corner[1][0] - corner[0][0]) + (corner[1][1] - corner[0][1])*(corner[1][1] - corner[0][1]));
+	sw->d = sw->long_side - 2*sw->r;
+
+	sw->u1 = (corner[2][0] - corner[0][0])/sw->long_side;
+	sw->v1 = (corner[2][1] - corner[0][1])/sw->long_side;
+	sw->u2 = (corner[1][0] - corner[0][0])/sw->short_side;
+	sw->v2 = (corner[1][1] - corner[0][1])/sw->short_side;
+
+	printf("Sweep parameters calculated:\n");
+	printf("x0: %f  y0: %f\n", corner[0][0],corner[0][1]);
+	printf("x1: %f  y1: %f\n", corner[1][0],corner[1][1]);
+	printf("x2: %f  y2: %f\n", corner[2][0],corner[2][1]);
+	printf("x3: %f  y3: %f\n", corner[3][0],corner[3][1]);
+	printf("\nlong: %f  short: %f\n", sw->long_side, sw->short_side);
+	printf("\nu1: %f  v1: %f \n", sw->u1,sw->v1);
+	printf("u2: %f  v2: %f \n", sw->u2,sw->v2);
+
+	return 0;
+}
+
+
 void* search_thread_func (gpointer n_det)
 {
 	uint16_t npic = 0;	                         ///< number of times the picture has been detected
@@ -413,6 +573,95 @@ void* search_thread_func (gpointer n_det)
 	return NULL;
 }
 
+void* sweep_thread_func (gpointer sweep_wp)
+{
+	sweep_state = PX_WPP_SWEEP_RUNNING;
+
+	mavlink_waypoint_t* sweep_wp_ = (mavlink_waypoint_t*) sweep_wp; // Sweep waypoint with all the necessary data.
+	sweep_parameters sw;
+
+	if(!calculate_sweep_parameters (sweep_wp_, last_known_pos, &sw))
+	{
+		bool yawReached=false;						// boolean for yaw attitude reached
+		bool posReached=false;						// boolean for position reached
+		uint16_t fake_next_wp_id = sweep_wp_->seq;  // defined for the sake of "check_if_reached_dest"-function
+		mavlink_waypoint_t next_destination; 		// this is not a real waypoint, it will not appear in the list. It is just used as a struct, which can be passed to "set_destination" function.
+		next_destination.command = MAV_CMD_NAV_WAYPOINT; // Must be declared
+		next_destination.frame = 1;
+		next_destination.param1 = 0.15; // acceptance radius may depend on sw.r, e.g. 0.2*sw.r
+		next_destination.param2 = 0.5; // MAV should stay 0.5s at each checkpoint within the sweep
+		next_destination.param4 = 0; // Should yaw stay constant all the time?
+		next_destination.z = sw.z;
+
+		uint16_t sweep_line = 0; // sweep line count, starting at zero.
+
+		// consecutive checkpoints
+		while (sw.short_side > (1+2*sweep_line)*sw.r)
+		{
+			if (verbose) printf("Sweep: proceeding to line %u\n", sweep_line);
+
+			// (sweep_line*2)-th chechpoint
+			if (current_active_wp_id != sweep_wp_->seq) //terminate thread if current waypoint changed
+			{
+				sweep_state = PX_WPP_SWEEP_IDLE;
+				if (verbose) printf("Sweep: failed. Current waypoint changed. Thread terminated.\n");
+				g_mutex_unlock(main_mutex);
+				return NULL;
+			}
+			if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2);
+	    	next_destination.x = sw.x0 + (sw.r + (sweep_line % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
+	    	next_destination.y = sw.y0 + (sw.r + (sweep_line % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
+	    	if (verbose) printf("Sweep: next dest (%f, %f)",next_destination.x,next_destination.y);
+	    	set_destination(&next_destination);
+	    	yawReached = false;						///< boolean for yaw attitude reached
+	    	posReached = false;						///< boolean for position reached
+	    	while (posReached==false || yawReached==false)
+	    	{
+	    		g_cond_wait(cond_position_received,main_mutex);
+		    	yawReached = false;						///< boolean for yaw attitude reached
+		    	posReached = false;						///< boolean for position reached
+		    	check_if_reached_dest(&posReached, &yawReached, fake_next_wp_id);
+	    	}
+
+
+	    	// (sweep_line*2 + 1)-th chechpoint
+			if (current_active_wp_id != sweep_wp_->seq) //terminate thread if current waypoint changed
+			{
+				sweep_state = PX_WPP_SWEEP_IDLE;
+				if (verbose) printf("Sweep: failed. Current waypoint changed. Thread terminated.\n");
+				g_mutex_unlock(main_mutex);
+				return NULL;
+			}
+	    	if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2+1);
+	    	next_destination.x = sw.x0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
+	    	next_destination.y = sw.y0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
+	    	if (verbose) printf("Sweep: next dest (%f, %f)",next_destination.x,next_destination.y);
+	    	set_destination(&next_destination);
+	    	yawReached = false;						///< boolean for yaw attitude reached
+	    	posReached = false;						///< boolean for position reached
+	    	while (posReached==false || yawReached==false)
+	    	{
+	    		g_cond_wait(cond_position_received,main_mutex);
+		    	yawReached = false;						///< boolean for yaw attitude reached
+		    	posReached = false;						///< boolean for position reached
+		    	check_if_reached_dest(&posReached, &yawReached, fake_next_wp_id);
+	    	}
+	    	sweep_line++;
+		}
+		sweep_state = PX_WPP_SWEEP_FINISHED;
+		if (verbose) printf("Sweep: finished. Thread terminated.\n");
+	}
+	else
+	{
+		sweep_state = PX_WPP_SWEEP_IDLE;
+		if (verbose) printf("Sweep: failed. Wrong parameters. Thread terminated.\n");
+	}
+	g_mutex_unlock(main_mutex);
+	return NULL;
+}
+
+
+
 
 void handle_waypoint (uint16_t seq, uint64_t now)
 {
@@ -431,45 +680,11 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    	bool yawReached = false;						///< boolean for yaw attitude reached
 	    	bool posReached = false;						///< boolean for position reached
 
-            // compare last known position with current destination
-            float dist;
             next_wp_id = seq+1;
-            if (waypoints->at(seq)->param1 == 0 && next_wp_id < waypoints->size() && waypoints->at(next_wp_id)->command == MAV_CMD_NAV_WAYPOINT)
-            {
-            	//if (debug) printf("Both current and next waypoint (%u) are MAV_CMD_NAV_WAYPOINT. Using distanceToSegment.\n", next_wp_id);
-                dist = distanceToSegment(last_known_pos.x, last_known_pos.y, last_known_pos.z, next_wp_id);
-            }
-            else
-            {
-                dist = distanceToPoint(last_known_pos.x, last_known_pos.y, last_known_pos.z);
-            }
+            // compare last known position with current destination
+            check_if_reached_dest(&posReached, &yawReached, next_wp_id);
 
-            if (dist >= 0.f && dist <= cur_dest.rad)
-            {
-                posReached = true;
-            }
-
-	    	// yaw reached?
-            float yaw_tolerance = paramClient->getParamValue("YAWTOLERANCE");
-            //compare last known yaw with current desired yaw
-            if (last_known_att.yaw - yaw_tolerance >= 0.0f && last_known_att.yaw + yaw_tolerance < 2.f*M_PI)
-            {
-                if (last_known_att.yaw - yaw_tolerance <= cur_dest.yaw*M_PI/180 && last_known_att.yaw + yaw_tolerance >= cur_dest.yaw*M_PI/180)
-                    yawReached = true;
-            }
-            else if(last_known_att.yaw - yaw_tolerance < 0.0f)
-            {
-                float lowerBound = 2.f*M_PI + last_known_att.yaw - yaw_tolerance;
-                if (lowerBound < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < last_known_att.yaw + yaw_tolerance)
-                    yawReached = true;
-            }
-            else
-            {
-                float upperBound = last_known_att.yaw + yaw_tolerance - 2.f*M_PI;
-                if (last_known_att.yaw - yaw_tolerance < cur_dest.yaw*M_PI/180 || cur_dest.yaw*M_PI/180 < upperBound)
-                    yawReached = true;
-            }
-	    		//check if the current waypoint was reached
+            //check if the current waypoint was reached
             if ((posReached && yawReached && !idle))
             {
             	if (timestamp_firstinside_orbit == 0)
@@ -661,6 +876,35 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    	ready_to_continue = true;
 	    	break;
 	    }
+
+	    case MAV_CMD_DO_SWEEP:
+	    {
+	    	if (sweep_state == PX_WPP_SWEEP_IDLE)
+	    	{
+		    	if( !g_thread_supported() )
+		    	{
+		    		g_thread_init(NULL); // Only initialize g thread if not already done
+		    	}
+
+	    		gpointer ptr = (gpointer) cur_wp;
+
+		    	GThread* search_thread = NULL;
+		    	if( (search_thread = g_thread_create(sweep_thread_func, ptr, TRUE, &error)) == NULL)
+		    	{
+		    		printf("Thread creation failed: %s!!\n", error->message );
+		    		g_error_free ( error ) ;
+		    	}
+		    	if (verbose) printf("Sweep thread created!\n");
+	    	}
+	    	else if (sweep_state == PX_WPP_SWEEP_FINISHED)
+	    	{
+	    		sweep_state = PX_WPP_SWEEP_IDLE;
+		    	next_wp_id = seq + 1;
+		    	ready_to_continue = true;
+		    	break;
+	    	}
+	    }
+
 
 	    }} //end switch, end if
 
@@ -1072,6 +1316,9 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                if(cur_dest.frame == 1)
 	                {
 	                    mavlink_msg_local_position_decode(msg, &last_known_pos);
+
+	                    g_cond_broadcast (cond_position_received);
+
 	                    if (debug) printf("Received new position: x: %f | y: %f | z: %f\n", last_known_pos.x, last_known_pos.y, last_known_pos.z);
 	                    struct timeval tv;
                         gettimeofday(&tv, NULL);
@@ -1212,7 +1459,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 
 static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, const mavlink_message_t* msg, void * user)
 {
-	g_static_mutex_lock(main_mutex);
+	g_mutex_lock(main_mutex);
 
     // Handle param messages
     paramClient->handleMAVLinkPacket(msg);
@@ -1238,7 +1485,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
 
     handle_communication(msg, now);
 
-    g_static_mutex_unlock(main_mutex);
+    g_mutex_unlock(main_mutex);
 }
 
 void* lcm_thread_func (gpointer lcm_ptr)
@@ -1330,19 +1577,24 @@ int main(int argc, char* argv[])
 	}
 
     /**********************************
-    * Initialize mutex
+    * Initialize mutex(es) and Condition(s)
     **********************************/
 	if (!main_mutex)
 	{
-		g_static_mutex_init(main_mutex);
+		main_mutex = g_mutex_new();
+		printf("Mutex created\n");
 	}
 
-
+	if (!cond_position_received)
+	{
+		cond_position_received = g_cond_new();
+		printf("Condition created\n");
+	}
     /**********************************
     * Read waypoints from file and
     * set the new current waypoint
     **********************************/
-	g_static_mutex_lock(main_mutex);
+	g_mutex_lock(main_mutex);
     if (waypointfile.length())
     {
         std::ifstream wpfile;
@@ -1446,7 +1698,7 @@ int main(int argc, char* argv[])
         }
 
     }
-    g_static_mutex_unlock(main_mutex);
+    g_mutex_unlock(main_mutex);
 
 
     printf("WAYPOINTPLANNER INITIALIZATION DONE, RUNNING...\n");
@@ -1456,12 +1708,12 @@ int main(int argc, char* argv[])
     **********************************/
     while (1)//need some break condition, e.g. if LCM fails
     {
-    	g_static_mutex_lock(main_mutex);
+    	g_mutex_lock(main_mutex);
         if(current_active_wp_id != (uint16_t)-1)
         {
             send_setpoint();
         }
-        g_static_mutex_unlock(main_mutex);
+        g_mutex_unlock(main_mutex);
         usleep(paramClient->getParamValue("SETPOINTDELAY")*1000000);
 
     }
