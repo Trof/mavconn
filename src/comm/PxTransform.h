@@ -1,7 +1,7 @@
 #ifndef PXTRANSFORM_H_
 #define PXTRANSFORM_H_
 
-#include <cv.h>
+#include <opencv2/core/core.hpp>
 #include <string>
 
 class PxTransform

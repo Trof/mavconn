@@ -20,10 +20,12 @@ int64_t __point_cloud_message_t_hash_recursive(const __lcm_hash_ptr *p)
     const __lcm_hash_ptr cp = { p, (void*)__point_cloud_message_t_get_hash };
     (void) cp;
  
-    int64_t hash = 0x6cc580aaa28f00bdLL
+    int64_t hash = 0x26dce41b522bf55fLL
          + __int64_t_hash_recursive(&cp)
          + __float_hash_recursive(&cp)
-         + __int8_t_hash_recursive(&cp)
+         + __float_hash_recursive(&cp)
+         + __float_hash_recursive(&cp)
+         + __float_hash_recursive(&cp)
         ;
  
     return (hash<<1) + ((hash>>63)&1);
@@ -48,19 +50,17 @@ int __point_cloud_message_t_encode_array(void *buf, int offset, int maxlen, cons
         thislen = __int64_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].count), 1);
         if (thislen < 0) return thislen; else pos += thislen;
  
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            thislen = __float_encode_array(buf, offset + pos, maxlen - pos, p[element].points[a], 3);
-            if (thislen < 0) return thislen; else pos += thislen;
-        }
-        }
+        thislen = __float_encode_array(buf, offset + pos, maxlen - pos, p[element].x, p[element].count);
+        if (thislen < 0) return thislen; else pos += thislen;
  
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            thislen = __int8_t_encode_array(buf, offset + pos, maxlen - pos, p[element].colors[a], 3);
-            if (thislen < 0) return thislen; else pos += thislen;
-        }
-        }
+        thislen = __float_encode_array(buf, offset + pos, maxlen - pos, p[element].y, p[element].count);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __float_encode_array(buf, offset + pos, maxlen - pos, p[element].z, p[element].count);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __float_encode_array(buf, offset + pos, maxlen - pos, p[element].rgb, p[element].count);
+        if (thislen < 0) return thislen; else pos += thislen;
  
     }
     return pos;
@@ -87,17 +87,13 @@ int __point_cloud_message_t_encoded_array_size(const point_cloud_message_t *p, i
  
         size += __int64_t_encoded_array_size(&(p[element].count), 1);
  
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            size += __float_encoded_array_size(p[element].points[a], 3);
-        }
-        }
+        size += __float_encoded_array_size(p[element].x, p[element].count);
  
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            size += __int8_t_encoded_array_size(p[element].colors[a], 3);
-        }
-        }
+        size += __float_encoded_array_size(p[element].y, p[element].count);
+ 
+        size += __float_encoded_array_size(p[element].z, p[element].count);
+ 
+        size += __float_encoded_array_size(p[element].rgb, p[element].count);
  
     }
     return size;
@@ -117,23 +113,21 @@ int __point_cloud_message_t_decode_array(const void *buf, int offset, int maxlen
         thislen = __int64_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].count), 1);
         if (thislen < 0) return thislen; else pos += thislen;
  
-        p[element].points = (float**) lcm_malloc(sizeof(float*) * p[element].count);
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            p[element].points[a] = (float*) lcm_malloc(sizeof(float) * 3);
-            thislen = __float_decode_array(buf, offset + pos, maxlen - pos, p[element].points[a], 3);
-            if (thislen < 0) return thislen; else pos += thislen;
-        }
-        }
+        p[element].x = (float*) lcm_malloc(sizeof(float) * p[element].count);
+        thislen = __float_decode_array(buf, offset + pos, maxlen - pos, p[element].x, p[element].count);
+        if (thislen < 0) return thislen; else pos += thislen;
  
-        p[element].colors = (int8_t**) lcm_malloc(sizeof(int8_t*) * p[element].count);
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            p[element].colors[a] = (int8_t*) lcm_malloc(sizeof(int8_t) * 3);
-            thislen = __int8_t_decode_array(buf, offset + pos, maxlen - pos, p[element].colors[a], 3);
-            if (thislen < 0) return thislen; else pos += thislen;
-        }
-        }
+        p[element].y = (float*) lcm_malloc(sizeof(float) * p[element].count);
+        thislen = __float_decode_array(buf, offset + pos, maxlen - pos, p[element].y, p[element].count);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        p[element].z = (float*) lcm_malloc(sizeof(float) * p[element].count);
+        thislen = __float_decode_array(buf, offset + pos, maxlen - pos, p[element].z, p[element].count);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        p[element].rgb = (float*) lcm_malloc(sizeof(float) * p[element].count);
+        thislen = __float_decode_array(buf, offset + pos, maxlen - pos, p[element].rgb, p[element].count);
+        if (thislen < 0) return thislen; else pos += thislen;
  
     }
     return pos;
@@ -146,21 +140,17 @@ int __point_cloud_message_t_decode_array_cleanup(point_cloud_message_t *p, int e
  
         __int64_t_decode_array_cleanup(&(p[element].count), 1);
  
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            __float_decode_array_cleanup(p[element].points[a], 3);
-            if (p[element].points[a]) free(p[element].points[a]);
-        }
-        }
-        if (p[element].points) free(p[element].points);
+        __float_decode_array_cleanup(p[element].x, p[element].count);
+        if (p[element].x) free(p[element].x);
  
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            __int8_t_decode_array_cleanup(p[element].colors[a], 3);
-            if (p[element].colors[a]) free(p[element].colors[a]);
-        }
-        }
-        if (p[element].colors) free(p[element].colors);
+        __float_decode_array_cleanup(p[element].y, p[element].count);
+        if (p[element].y) free(p[element].y);
+ 
+        __float_decode_array_cleanup(p[element].z, p[element].count);
+        if (p[element].z) free(p[element].z);
+ 
+        __float_decode_array_cleanup(p[element].rgb, p[element].count);
+        if (p[element].rgb) free(p[element].rgb);
  
     }
     return 0;
@@ -194,21 +184,17 @@ int __point_cloud_message_t_clone_array(const point_cloud_message_t *p, point_cl
  
         __int64_t_clone_array(&(p[element].count), &(q[element].count), 1);
  
-        q[element].points = (float**) lcm_malloc(sizeof(float*) * q[element].count);
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            q[element].points[a] = (float*) lcm_malloc(sizeof(float) * 3);
-            __float_clone_array(p[element].points[a], q[element].points[a], 3);
-        }
-        }
+        q[element].x = (float*) lcm_malloc(sizeof(float) * q[element].count);
+        __float_clone_array(p[element].x, q[element].x, p[element].count);
  
-        q[element].colors = (int8_t**) lcm_malloc(sizeof(int8_t*) * q[element].count);
-        { int a;
-        for (a = 0; a < p[element].count; a++) {
-            q[element].colors[a] = (int8_t*) lcm_malloc(sizeof(int8_t) * 3);
-            __int8_t_clone_array(p[element].colors[a], q[element].colors[a], 3);
-        }
-        }
+        q[element].y = (float*) lcm_malloc(sizeof(float) * q[element].count);
+        __float_clone_array(p[element].y, q[element].y, p[element].count);
+ 
+        q[element].z = (float*) lcm_malloc(sizeof(float) * q[element].count);
+        __float_clone_array(p[element].z, q[element].z, p[element].count);
+ 
+        q[element].rgb = (float*) lcm_malloc(sizeof(float) * q[element].count);
+        __float_clone_array(p[element].rgb, q[element].rgb, p[element].count);
  
     }
     return 0;
