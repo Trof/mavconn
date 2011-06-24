@@ -88,10 +88,14 @@ std::vector<mavlink_waypoint_t*>* waypoints_receive_buffer = &waypoints2;	///< p
 
 GError *error = NULL;
 GThread* waypoint_lcm_thread = NULL;
-//static GStaticMutex* main_mutex = new GStaticMutex;
+
 static GMutex* main_mutex = NULL;
 static GCond* cond_position_received = NULL;
-
+static GCond* cond_pattern_detected = NULL;
+//Threads
+GThread* search_thread = NULL;
+GThread* sweep_thread = NULL;
+bool terminate_threads = false;
 
 //==== variables needed for communication protocol ====
 uint8_t systemid = getSystemID();          		///< indicates the ID of the system
@@ -111,10 +115,11 @@ enum PX_WAYPOINTPLANNER_STATES
 
 enum PX_WAYPOINTPLANNER_SEARCH_STATES
 {
-	PX_WPP_SEARCH_IDLE = 0,
-	PX_WPP_SEARCH_RUNNING,
-	PX_WPP_SEARCH_SUCCESS,
-	PX_WPP_SEARCH_PATTERN_DETECTED
+	PX_WPP_SEARCH_IDLE = 0, // No search threads are running
+	PX_WPP_SEARCH_RUNNING,	// The search thread is running, but required number of detections not yet reached
+	PX_WPP_SEARCH_SUCCESS,	// The search thread is running and has been successful
+	PX_WPP_SEARCH_RESET,	// Resetting the number of detections to 0 and continue search
+	PX_WPP_SEARCH_END		// MAV_CMD_DO_FINISH_SEARCH has no jumps left and the search thread is about to be terminated
 };
 
 enum PX_WAYPOINTPLANNER_SWEEP_STATES
@@ -173,7 +178,7 @@ void send_waypoint_ack(uint8_t target_systemid, uint8_t target_compid, uint8_t t
     if (verbose) printf("Sent waypoint ack (%u) to ID %u\n", wpa.type, wpa.target_system);
 }
 
-void send_command_ack(float feedback, uint8_t result)
+void send_command_ack(uint16_t cmd_id, uint8_t result)
 /*
 *  @brief Sends a command ack message
 *
@@ -184,15 +189,14 @@ void send_command_ack(float feedback, uint8_t result)
 	mavlink_message_t msg;
     mavlink_command_ack_t cmda;
 
-    cmda.command = feedback;
+    cmda.command = (float) cmd_id;
     cmda.result = (float) result;
 
     mavlink_msg_command_ack_encode(systemid, compid, &msg, &cmda);
     mavlink_message_t_publish(lcm, "MAVLINK", &msg);
+    if (verbose) printf("Sent ack to command(%u) with code %u\n", cmd_id, result);
 
     usleep(paramClient->getParamValue("PROTDELAY"));
-
-    if (verbose) printf("Sent command ack (%f) with feedback %f\n", cmda.result, cmda.command);
 }
 
 void send_waypoint_current(uint16_t seq)
@@ -525,6 +529,7 @@ for (i=3;i>0;i--)
 	sw->u2 = (corner[1][0] - corner[0][0])/sw->short_side;
 	sw->v2 = (corner[1][1] - corner[0][1])/sw->short_side;
 
+	/*
 	printf("Sweep parameters calculated:\n");
 	printf("x0: %f  y0: %f\n", corner[0][0],corner[0][1]);
 	printf("x1: %f  y1: %f\n", corner[1][0],corner[1][1]);
@@ -533,6 +538,7 @@ for (i=3;i>0;i--)
 	printf("\nlong: %f  short: %f\n", sw->long_side, sw->short_side);
 	printf("\nu1: %f  v1: %f \n", sw->u1,sw->v1);
 	printf("u2: %f  v2: %f \n", sw->u2,sw->v2);
+	*/
 
 	return 0;
 }
@@ -548,27 +554,35 @@ void* search_thread_func (gpointer n_det)
 	if (verbose) printf("here %u.\n", detections_needed);
 	while (1)
 	{
-		if (search_state == PX_WPP_SEARCH_PATTERN_DETECTED)
+		g_cond_wait(cond_pattern_detected,main_mutex);
+
+		if (terminate_threads == true || search_state == PX_WPP_SEARCH_END)
 		{
-			npic++;
-			if (last_detected_pattern.confidence >= best_conf)
-			{
-				best_conf = last_detected_pattern.confidence;
-				search_success_pos = last_known_pos;
-				search_success_att = last_known_att;
-			}
-
-			if (debug) printf("npic = %u. det_need = %u\n",npic,detections_needed);
-
-			if (npic >= detections_needed)
-			{
-				if (verbose) printf("Search finished successfully! Best detection happened at position (%.2f,%.2f) with confidence %f\n",search_success_pos.x,search_success_pos.y, best_conf);
-				search_state = PX_WPP_SEARCH_SUCCESS;
-				break;
-			}
+			search_state = PX_WPP_SEARCH_IDLE;
+			g_mutex_unlock(main_mutex);
+			return NULL;
 		}
-		search_state = PX_WPP_SEARCH_RUNNING;
-		usleep(1000);
+		else if (search_state == PX_WPP_SEARCH_RESET)
+		{
+			npic = 0;
+			search_state = PX_WPP_SEARCH_RUNNING;
+		}
+
+		npic++;
+		if (last_detected_pattern.confidence >= best_conf)
+		{
+			best_conf = last_detected_pattern.confidence;
+			search_success_pos = last_known_pos;
+			search_success_att = last_known_att;
+		}
+
+		if (debug) printf("npic = %u. det_need = %u\n",npic,detections_needed);
+
+		if (npic >= detections_needed && search_state == PX_WPP_SEARCH_RUNNING)
+		{
+			if (verbose) printf("Search successful! Best detection so far happened at position (%.2f,%.2f) with confidence %f\n",search_success_pos.x,search_success_pos.y, best_conf);
+			search_state = PX_WPP_SEARCH_SUCCESS;
+		}
 	}
 	return NULL;
 }
@@ -601,13 +615,6 @@ void* sweep_thread_func (gpointer sweep_wp)
 			if (verbose) printf("Sweep: proceeding to line %u\n", sweep_line);
 
 			// (sweep_line*2)-th chechpoint
-			if (current_active_wp_id != sweep_wp_->seq) //terminate thread if current waypoint changed
-			{
-				sweep_state = PX_WPP_SWEEP_IDLE;
-				if (verbose) printf("Sweep: failed. Current waypoint changed. Thread terminated.\n");
-				g_mutex_unlock(main_mutex);
-				return NULL;
-			}
 			if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2);
 	    	next_destination.x = sw.x0 + (sw.r + (sweep_line % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
 	    	next_destination.y = sw.y0 + (sw.r + (sweep_line % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
@@ -618,20 +625,22 @@ void* sweep_thread_func (gpointer sweep_wp)
 	    	while (posReached==false || yawReached==false)
 	    	{
 	    		g_cond_wait(cond_position_received,main_mutex);
+				if (current_active_wp_id != sweep_wp_->seq || terminate_threads == true) //terminate thread if current waypoint changed
+				{
+					sweep_state = PX_WPP_SWEEP_IDLE;
+					if (verbose && current_active_wp_id != sweep_wp_->seq) printf("Sweep: failed. Current waypoint changed. Thread terminated.\n");
+					if (verbose && terminate_threads == true) printf("Sweep: Thread terminated.\n");
+					g_mutex_unlock(main_mutex);
+					return NULL;
+				}
+
 		    	yawReached = false;						///< boolean for yaw attitude reached
 		    	posReached = false;						///< boolean for position reached
 		    	check_if_reached_dest(&posReached, &yawReached, fake_next_wp_id);
 	    	}
 
-
 	    	// (sweep_line*2 + 1)-th chechpoint
-			if (current_active_wp_id != sweep_wp_->seq) //terminate thread if current waypoint changed
-			{
-				sweep_state = PX_WPP_SWEEP_IDLE;
-				if (verbose) printf("Sweep: failed. Current waypoint changed. Thread terminated.\n");
-				g_mutex_unlock(main_mutex);
-				return NULL;
-			}
+
 	    	if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2+1);
 	    	next_destination.x = sw.x0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
 	    	next_destination.y = sw.y0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
@@ -642,6 +651,15 @@ void* sweep_thread_func (gpointer sweep_wp)
 	    	while (posReached==false || yawReached==false)
 	    	{
 	    		g_cond_wait(cond_position_received,main_mutex);
+				if (current_active_wp_id != sweep_wp_->seq || terminate_threads == true)
+				{
+					sweep_state = PX_WPP_SWEEP_IDLE;
+					if (verbose && current_active_wp_id != sweep_wp_->seq) printf("Sweep: failed. Current waypoint changed. Thread terminated.\n");
+					if (verbose && terminate_threads == true) printf("Sweep: Thread terminated.\n");
+					g_mutex_unlock(main_mutex);
+					return NULL;
+				}
+
 		    	yawReached = false;						///< boolean for yaw attitude reached
 		    	posReached = false;						///< boolean for position reached
 		    	check_if_reached_dest(&posReached, &yawReached, fake_next_wp_id);
@@ -660,8 +678,18 @@ void* sweep_thread_func (gpointer sweep_wp)
 	return NULL;
 }
 
+/*
+// FIX ME!!
+void terminate_all_threads() //this fuction should be called every time when a new waypoint list is downloaded, to end threads from the old list.
+{
+	if (verbose) printf("Kill all threads!\n");
 
-
+	terminate_threads = true;
+	g_cond_broadcast(cond_pattern_detected); //fake condition broadcast in order to wake the search thread for termination
+	g_cond_broadcast(cond_position_received); //fake condition broadcast in order to wake the sweep thread for termination
+	terminate_threads = false;
+}
+*/
 
 void handle_waypoint (uint16_t seq, uint64_t now)
 {
@@ -755,17 +783,26 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    	break;
 	    case MAV_CMD_DO_JUMP:
 	    {
-			if (cur_wp->param2 > 0)
-			{
-				cur_wp->param2 = cur_wp->param2 - 1;
-				if (verbose) printf("Jump from waypoint %u to waypoint %u. %u jumps left\n", current_active_wp_id, (uint32_t) cur_wp->param1, (uint32_t) cur_wp->param2);
-				next_wp_id = cur_wp->param1;
-			}
-			else
-			{
-				next_wp_id = seq + 1;
-                if (verbose) printf("Jump command not performed: jump limit reached. Proceed to next waypoint\n");
-			}
+	    	if (cur_wp->param1 < waypoints->size())
+	    	{
+				if (cur_wp->param2 > 0)
+				{
+					cur_wp->param2 = cur_wp->param2 - 1;
+					if (verbose) printf("Jump from waypoint %u to waypoint %u. %u jumps left\n", current_active_wp_id, (uint32_t) cur_wp->param1, (uint32_t) cur_wp->param2);
+					next_wp_id = cur_wp->param1;
+				}
+				else
+				{
+					next_wp_id = seq + 1;
+	                if (verbose) printf("Jump command not performed: jump limit reached. Proceed to next waypoint\n");
+				}
+	    	}
+	    	else
+	    	{
+	    		next_wp_id = seq + 1;
+	    		cur_wp->autocontinue = false;
+	    		printf("Invalid parameters for MAV_CMD_DO_JUMP waypoint. Next waypoint is set to %u. Autocontinue turned off. \n",next_wp_id);
+	    	}
 			ready_to_continue = true;
 			break;
 	    }
@@ -803,7 +840,6 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 		    		ptr = (gpointer) &detections_needed;
 		    	}
 
-		    	GThread* search_thread = NULL;
 		    	if( (search_thread = g_thread_create(search_thread_func, ptr, TRUE, &error)) == NULL)
 		    	{
 		    		printf("Thread creation failed: %s!!\n", error->message );
@@ -839,6 +875,16 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 				    		next_wp_id = cur_wp->param2;
 				    		if (verbose) printf("Search failed. Proceeding to waypoint %u\n",next_wp_id);
 				    	}
+
+				    	if (cur_wp->param3 > 0)
+				    	{
+				    		search_state = PX_WPP_SEARCH_RESET;
+				    	}
+				    	else
+				    	{
+				    		search_state = PX_WPP_SEARCH_END;
+				    		g_cond_broadcast(cond_pattern_detected); //fake condition broadcast in order to wake the search thread for termination
+				    	}
 			    	}
 			    	else
 			    	{
@@ -849,6 +895,8 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 				}
 				else
 				{
+					search_state = PX_WPP_SEARCH_END;
+					g_cond_broadcast(cond_pattern_detected); //fake condition broadcast in order to wake the search thread for termination
 		    		next_wp_id = seq + 1;
 				}
 	    	}
@@ -888,8 +936,7 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 
 	    		gpointer ptr = (gpointer) cur_wp;
 
-		    	GThread* search_thread = NULL;
-		    	if( (search_thread = g_thread_create(sweep_thread_func, ptr, TRUE, &error)) == NULL)
+		    	if( (sweep_thread = g_thread_create(sweep_thread_func, ptr, TRUE, &error)) == NULL)
 		    	{
 		    		printf("Thread creation failed: %s!!\n", error->message );
 		    		g_error_free ( error ) ;
@@ -1126,7 +1173,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                            delete waypoints_receive_buffer->back();
 	                            waypoints_receive_buffer->pop_back();
 	                        }
-
+	                        //terminate_all_threads();
 	                        send_waypoint_request(protocol_current_partner_systemid, protocol_current_partner_compid, protocol_current_wp_id);
 	                    }
 	                    else if (wpc.count == 0)
@@ -1137,6 +1184,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                            delete waypoints->back();
 	                            waypoints->pop_back();
 	                        }
+	                        //terminate_all_threads();
 	                        current_active_wp_id = -1;
 	                        break;
 
@@ -1281,6 +1329,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                    delete waypoints->back();
 	                    waypoints->pop_back();
 	                }
+	                //terminate_all_threads();
 	                current_active_wp_id = -1;
 	            }
 	            else if (wpca.target_system == systemid && wpca.target_component == compid && current_state != PX_WPP_IDLE)
@@ -1337,18 +1386,16 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 				mavlink_msg_pattern_detected_decode(msg, &pd);
 				//printf("Pattern - conf: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
 
-				if (search_state == PX_WPP_SEARCH_RUNNING)
+				if (search_state != PX_WPP_SEARCH_IDLE)
 				{
 					GString* SEARCH_PIC = g_string_new("./media/sweep_images/mona.jpg");
 					if(pd.detected==1 && strcmp((char*)pd.file,SEARCH_PIC->str) == 0 && pd.confidence >= min_conf)
 					{
 						last_detected_pattern = pd;
-						search_state = PX_WPP_SEARCH_PATTERN_DETECTED;
 						if(verbose) printf("Found it! - confidence: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
+						g_cond_broadcast (cond_pattern_detected);
 					}
 				}
-
-
 				break;
 			}
 		case MAVLINK_MSG_ID_COMMAND:
@@ -1374,23 +1421,23 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 		    						if (new_autocontinue_value == 0)
 		    						{
 		    							waypoints->at(wp_id)->autocontinue = false;
-		    							send_command_ack(0,0);
+		    							send_command_ack(CMD_SET_AUTOCONTINUE,0);
 		    						}
 		    						else if (new_autocontinue_value == 1)
 		    						{
 		    							waypoints->at(wp_id)->autocontinue = true;
-		    							send_command_ack(1,0);
+		    							send_command_ack(CMD_SET_AUTOCONTINUE,0);
 		    						}
 		    						else
 		    						{
 		    							if (debug) std::cerr << "Waypointplanner: CMD_SET_AUTOCONTINUE command must have param2 value of 0 or 1" << std::endl;
-		    							send_command_ack(0,2);
+		    							send_command_ack(CMD_SET_AUTOCONTINUE,2);
 		    						}
 	    						}
 	    						else
 	    						{
 	    							if (verbose) printf("Ignored MAVLINK_MSG_ID_COMMAND (CMD_SET_AUTOCONTINUE): Waypoint index out of bounds\n");
-	    							send_command_ack(0,2);
+	    							send_command_ack(CMD_SET_AUTOCONTINUE,2);
 	    						}
 
 	    						break;
@@ -1588,7 +1635,8 @@ int main(int argc, char* argv[])
 	if (!cond_position_received)
 	{
 		cond_position_received = g_cond_new();
-		printf("Condition created\n");
+		cond_pattern_detected = g_cond_new();
+		printf("Conditions created\n");
 	}
     /**********************************
     * Read waypoints from file and
