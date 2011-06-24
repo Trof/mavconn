@@ -1,6 +1,8 @@
 struct point_cloud_message_t
 {    
     int64_t count;
-    float points[count][3];
-    int8_t colors[count][3];
+    float x[count];
+    float y[count];
+    float z[count];
+    float rgb[count];
 }
