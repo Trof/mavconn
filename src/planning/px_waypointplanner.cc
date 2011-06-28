@@ -61,24 +61,16 @@ typedef struct _sweep_parameters
 } sweep_parameters;
 
 //==== variables for the planner ====
-bool idle = false;      				///< indicates if the system is following the waypoints or is waiting
 uint16_t current_active_wp_id = -1;		///< id of current waypoint
-uint16_t next_wp_id = -1;
-bool ready_to_continue = false;
+uint16_t next_wp_id = -1;				///< id of next waypoint, after current is reached.
+bool ready_to_continue = false;			///< this marker is set "true" when all necessary conditions of the current waypoint are fulfilled and wpp is ready to proceed to the next waypoint.
 uint64_t timestamp_lastoutside_orbit = 0;///< timestamp when the MAV was last outside the orbit or had the wrong yaw value
 uint64_t timestamp_firstinside_orbit = 0;///< timestamp when the MAV was the first time after a waypoint change inside the orbit and had the correct yaw value
 uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay command was initiated
 
-
-mavlink_local_position_t search_success_pos; ///< position of MAV when it succeeded in search
-mavlink_attitude_t search_success_att;		 ///< attitude of MAV when it succeeded in search
-float min_conf = 0;                        ///< minimum confidence for pattern to be detected successfully.
-//static GString* SEARCH_PIC = g_string_new("media/sweep_images/mona.jpg");	///< relative path of the search image
-
 mav_destination cur_dest;				 ///< current flight destination
 mavlink_local_position_t last_known_pos; ///< latest received position of MAV
 mavlink_attitude_t last_known_att;		 ///< latest received attitude of MAV
-mavlink_pattern_detected_t last_detected_pattern; ///< latest successful pattern detection
 
 std::vector<mavlink_waypoint_t*> waypoints1;	///< vector1 that holds the waypoints
 std::vector<mavlink_waypoint_t*> waypoints2;	///< vector2 that holds the waypoints
@@ -86,13 +78,24 @@ std::vector<mavlink_waypoint_t*> waypoints2;	///< vector2 that holds the waypoin
 std::vector<mavlink_waypoint_t*>* waypoints = &waypoints1;					///< pointer to the currently active waypoint vector
 std::vector<mavlink_waypoint_t*>* waypoints_receive_buffer = &waypoints2;	///< pointer to the receive buffer waypoint vector
 
+//==== variables for the search thread ====
+mavlink_local_position_t search_success_pos; ///< position of MAV when it succeeded in search
+mavlink_attitude_t search_success_att;		 ///< attitude of MAV when it succeeded in search
+mavlink_pattern_detected_t last_detected_pattern; ///< latest successful pattern detection
+float min_conf = 0;                        ///< minimum confidence for pattern to be detected successfully.
+//static GString* SEARCH_PIC = g_string_new("media/sweep_images/mona.jpg");	///< relative path of the search image
+
+//==== variables for the sweep thread ====
+mavlink_waypoint_t* next_sweep_wp = NULL;
+
+//==== Thread and mutex declarations ====
 GError *error = NULL;
 GThread* waypoint_lcm_thread = NULL;
 
 static GMutex* main_mutex = NULL;
 static GCond* cond_position_received = NULL;
 static GCond* cond_pattern_detected = NULL;
-//Threads
+
 GThread* search_thread = NULL;
 GThread* sweep_thread = NULL;
 bool terminate_threads = false;
@@ -105,12 +108,18 @@ PxParamClient* paramClient;
 
 enum PX_WAYPOINTPLANNER_STATES
 {
-    PX_WPP_IDLE = 0,
-    PX_WPP_SENDLIST,
-    PX_WPP_SENDLIST_SENDWPS,
-    PX_WPP_GETLIST,
-    PX_WPP_GETLIST_GETWPS,
-    PX_WPP_GETLIST_GOTALL
+	PX_WPP_IDLE = 0,
+	PX_WPP_RUNNING,
+	PX_WPP_ON_HOLD
+};
+
+enum PX_WAYPOINTPLANNER_COMMUNICATION_STATES
+{
+    PX_WPP_COMM_IDLE = 0,
+    PX_WPP_COMM_SENDLIST,
+    PX_WPP_COMM_SENDLIST_SENDWPS,
+    PX_WPP_COMM_GETLIST,
+    PX_WPP_COMM_GETLIST_GETWPS
 };
 
 enum PX_WAYPOINTPLANNER_SEARCH_STATES
@@ -142,11 +151,13 @@ enum PX_CMD_MESSAGE_ID
 {
 	//These are unofficial id's of Command(#75) mavlink message
 
-	CMD_SET_AUTOCONTINUE = 50
-
+	CMD_SET_AUTOCONTINUE = 50,
+	CMD_HALT = 51,
+	CMD_CONTINUE = 52
 };
 
-PX_WAYPOINTPLANNER_STATES current_state = PX_WPP_IDLE;
+PX_WAYPOINTPLANNER_STATES wpp_state = PX_WPP_IDLE;
+PX_WAYPOINTPLANNER_COMMUNICATION_STATES comm_state = PX_WPP_COMM_IDLE;
 PX_WAYPOINTPLANNER_SEARCH_STATES search_state = PX_WPP_SEARCH_IDLE;
 PX_WAYPOINTPLANNER_SWEEP_STATES sweep_state = PX_WPP_SWEEP_IDLE;
 uint16_t protocol_current_wp_id = 0;
@@ -157,6 +168,8 @@ uint8_t protocol_current_partner_compid = 0;
 uint64_t protocol_timestamp_lastaction = 0;
 uint64_t timestamp_last_send_setpoint = 0;
 uint64_t timestamp_last_handle_waypoint = 0;
+
+void handle_waypoint (uint16_t seq, uint64_t now);
 
 void send_waypoint_ack(uint8_t target_systemid, uint8_t target_compid, uint8_t type)
 /*
@@ -366,6 +379,23 @@ void set_destination(mavlink_waypoint_t* wp)
 	}
 }
 
+mavlink_waypoint_t* get_wp_of_current_position ()
+{
+	mavlink_waypoint_t* wp = new mavlink_waypoint_t;
+	wp->autocontinue = true;
+	wp->command = MAV_CMD_NAV_WAYPOINT;
+	wp->current = false;
+	wp->frame = cur_dest.frame;
+	wp->param1 = 0;
+	wp->param2 = 0;
+	wp->param3 = 0;
+	wp->param4 = last_known_att.yaw;
+	wp->x = last_known_pos.x;
+	wp->y = last_known_pos.y;
+	wp->z = last_known_pos.z;
+	wp->seq = 0;
+	return wp;
+}
 
 float distanceToSegment(float x, float y, float z , uint16_t next_NAV_wp_id)
 {
@@ -544,6 +574,19 @@ for (i=3;i>0;i--)
 }
 
 
+/*
+// FIX ME!!
+void terminate_all_threads() //this fuction should be called every time when a new waypoint list is downloaded, to end threads from the old list.
+{
+	if (verbose) printf("Kill all threads!\n");
+
+	terminate_threads = true;
+	g_cond_broadcast(cond_pattern_detected); //fake condition broadcast in order to wake the search thread for termination
+	g_cond_broadcast(cond_position_received); //fake condition broadcast in order to wake the sweep thread for termination
+	terminate_threads = false;
+}
+*/
+
 void* search_thread_func (gpointer n_det)
 {
 	uint16_t npic = 0;	                         ///< number of times the picture has been detected
@@ -568,20 +611,23 @@ void* search_thread_func (gpointer n_det)
 			search_state = PX_WPP_SEARCH_RUNNING;
 		}
 
-		npic++;
-		if (last_detected_pattern.confidence >= best_conf)
+		if (wpp_state == PX_WPP_RUNNING) //do not count pattern recognitions while on hold.
 		{
-			best_conf = last_detected_pattern.confidence;
-			search_success_pos = last_known_pos;
-			search_success_att = last_known_att;
-		}
+			npic++;
+			if (last_detected_pattern.confidence >= best_conf)
+			{
+				best_conf = last_detected_pattern.confidence;
+				search_success_pos = last_known_pos;
+				search_success_att = last_known_att;
+			}
 
-		if (debug) printf("npic = %u. det_need = %u\n",npic,detections_needed);
+			if (debug) printf("npic = %u. det_need = %u\n",npic,detections_needed);
 
-		if (npic >= detections_needed && search_state == PX_WPP_SEARCH_RUNNING)
-		{
-			if (verbose) printf("Search successful! Best detection so far happened at position (%.2f,%.2f) with confidence %f\n",search_success_pos.x,search_success_pos.y, best_conf);
-			search_state = PX_WPP_SEARCH_SUCCESS;
+			if (npic >= detections_needed && search_state == PX_WPP_SEARCH_RUNNING)
+			{
+				if (verbose) printf("Search successful! Best detection so far happened at position (%.2f,%.2f) with confidence %f\n",search_success_pos.x,search_success_pos.y, best_conf);
+				search_state = PX_WPP_SEARCH_SUCCESS;
+			}
 		}
 	}
 	return NULL;
@@ -591,6 +637,10 @@ void* sweep_thread_func (gpointer sweep_wp)
 {
 	sweep_state = PX_WPP_SWEEP_RUNNING;
 
+	struct timeval tv;
+    gettimeofday(&tv, NULL);
+    uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
+
 	mavlink_waypoint_t* sweep_wp_ = (mavlink_waypoint_t*) sweep_wp; // Sweep waypoint with all the necessary data.
 	sweep_parameters sw;
 
@@ -599,13 +649,13 @@ void* sweep_thread_func (gpointer sweep_wp)
 		bool yawReached=false;						// boolean for yaw attitude reached
 		bool posReached=false;						// boolean for position reached
 		uint16_t fake_next_wp_id = sweep_wp_->seq;  // defined for the sake of "check_if_reached_dest"-function
-		mavlink_waypoint_t next_destination; 		// this is not a real waypoint, it will not appear in the list. It is just used as a struct, which can be passed to "set_destination" function.
-		next_destination.command = MAV_CMD_NAV_WAYPOINT; // Must be declared
-		next_destination.frame = 1;
-		next_destination.param1 = 0.15; // acceptance radius may depend on sw.r, e.g. 0.2*sw.r
-		next_destination.param2 = 0.5; // MAV should stay 0.5s at each checkpoint within the sweep
-		next_destination.param4 = 0; // Should yaw stay constant all the time?
-		next_destination.z = sw.z;
+		next_sweep_wp = new mavlink_waypoint_t;
+		next_sweep_wp->command = MAV_CMD_NAV_WAYPOINT; // Must be declared
+		next_sweep_wp->frame = 1;
+		next_sweep_wp->param1 = 0.15; // acceptance radius may depend on sw.r, e.g. 0.2*sw.r
+		next_sweep_wp->param2 = 0.5; // MAV should stay 0.5s at each checkpoint within the sweep
+		next_sweep_wp->param4 = 0; // Should yaw stay constant all the time?
+		next_sweep_wp->z = sw.z;
 
 		uint16_t sweep_line = 0; // sweep line count, starting at zero.
 
@@ -616,13 +666,14 @@ void* sweep_thread_func (gpointer sweep_wp)
 
 			// (sweep_line*2)-th chechpoint
 			if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2);
-	    	next_destination.x = sw.x0 + (sw.r + (sweep_line % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
-	    	next_destination.y = sw.y0 + (sw.r + (sweep_line % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
-	    	if (verbose) printf("Sweep: next dest (%f, %f)",next_destination.x,next_destination.y);
-	    	set_destination(&next_destination);
+	    	next_sweep_wp->x = sw.x0 + (sw.r + (sweep_line % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
+	    	next_sweep_wp->y = sw.y0 + (sw.r + (sweep_line % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
+	    	if (verbose) printf("Sweep: next dest (%f, %f)",next_sweep_wp->x,next_sweep_wp->y);
+	    	now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
+	    	handle_waypoint(current_active_wp_id,now);
 	    	yawReached = false;						///< boolean for yaw attitude reached
 	    	posReached = false;						///< boolean for position reached
-	    	while (posReached==false || yawReached==false)
+	    	while (posReached==false || yawReached==false || wpp_state != PX_WPP_RUNNING)
 	    	{
 	    		g_cond_wait(cond_position_received,main_mutex);
 				if (current_active_wp_id != sweep_wp_->seq || terminate_threads == true) //terminate thread if current waypoint changed
@@ -642,13 +693,14 @@ void* sweep_thread_func (gpointer sweep_wp)
 	    	// (sweep_line*2 + 1)-th chechpoint
 
 	    	if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2+1);
-	    	next_destination.x = sw.x0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
-	    	next_destination.y = sw.y0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
-	    	if (verbose) printf("Sweep: next dest (%f, %f)",next_destination.x,next_destination.y);
-	    	set_destination(&next_destination);
+	    	next_sweep_wp->x = sw.x0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
+	    	next_sweep_wp->y = sw.y0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
+	    	if (verbose) printf("Sweep: next dest (%f, %f)",next_sweep_wp->x,next_sweep_wp->y);
+	    	now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
+	    	handle_waypoint(current_active_wp_id,now);
 	    	yawReached = false;						///< boolean for yaw attitude reached
 	    	posReached = false;						///< boolean for position reached
-	    	while (posReached==false || yawReached==false)
+	    	while (posReached==false || yawReached==false || wpp_state != PX_WPP_RUNNING)
 	    	{
 	    		g_cond_wait(cond_position_received,main_mutex);
 				if (current_active_wp_id != sweep_wp_->seq || terminate_threads == true)
@@ -678,24 +730,11 @@ void* sweep_thread_func (gpointer sweep_wp)
 	return NULL;
 }
 
-/*
-// FIX ME!!
-void terminate_all_threads() //this fuction should be called every time when a new waypoint list is downloaded, to end threads from the old list.
-{
-	if (verbose) printf("Kill all threads!\n");
-
-	terminate_threads = true;
-	g_cond_broadcast(cond_pattern_detected); //fake condition broadcast in order to wake the search thread for termination
-	g_cond_broadcast(cond_position_received); //fake condition broadcast in order to wake the sweep thread for termination
-	terminate_threads = false;
-}
-*/
-
 void handle_waypoint (uint16_t seq, uint64_t now)
 {
 	//if (debug) printf("Started executing waypoint(%u)...\n",seq);
 
-	if (seq < waypoints->size())
+	if (seq < waypoints->size() && wpp_state == PX_WPP_RUNNING)
 	{
 		mavlink_waypoint_t *cur_wp = waypoints->at(seq);
 		if (ready_to_continue == false){
@@ -713,7 +752,7 @@ void handle_waypoint (uint16_t seq, uint64_t now)
             check_if_reached_dest(&posReached, &yawReached, next_wp_id);
 
             //check if the current waypoint was reached
-            if ((posReached && yawReached && !idle))
+            if (posReached && yawReached)
             {
             	if (timestamp_firstinside_orbit == 0)
             	{
@@ -950,6 +989,10 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 		    	ready_to_continue = true;
 		    	break;
 	    	}
+	    	else if (sweep_state = PX_WPP_SWEEP_RUNNING)
+	    	{
+	    		set_destination(next_sweep_wp);
+	    	}
 	    }
 
 
@@ -985,15 +1028,20 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 		}
 
 	}
-	else
+	else if (seq >= waypoints->size())
 	{
 		if (verbose) printf("Waypoint %u is out of bounds. Currently have %u waypoints.\n", seq, (uint16_t)waypoints->size());
 	}
-
+	else // wpp_state != PX_WPP_RUNNING
+	{
+		//if (verbose) printf("Waypoint not executed, waypointplanner not in running state.\n");
+	}
 	//if (debug) printf("Finished executing waypoint(%u)...\n",seq);
 	timestamp_last_handle_waypoint = now;
 
 }
+
+
 
 static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 {
@@ -1008,12 +1056,12 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            {
 	                protocol_timestamp_lastaction = now;
 
-	                if (current_state == PX_WPP_SENDLIST || current_state == PX_WPP_SENDLIST_SENDWPS)
+	                if (comm_state == PX_WPP_COMM_SENDLIST || comm_state == PX_WPP_COMM_SENDLIST_SENDWPS)
 	                {
 	                    if (protocol_current_wp_id == waypoints->size()-1)
 	                    {
-	                        if (verbose) printf("Received Ack after having sent last waypoint, going to state PX_WPP_IDLE\n");
-	                        current_state = PX_WPP_IDLE;
+	                        if (verbose) printf("Received Ack after having sent last waypoint, going to state PX_WPP_COMM_IDLE\n");
+	                        comm_state = PX_WPP_COMM_IDLE;
 	                        protocol_current_wp_id = 0;
 	                    }
 	                }
@@ -1030,7 +1078,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            {
 	                protocol_timestamp_lastaction = now;
 
-	                if (current_state == PX_WPP_IDLE)
+	                if (comm_state == PX_WPP_COMM_IDLE)
 	                {
 	                    if (wpc.seq < waypoints->size())
 	                    {
@@ -1072,13 +1120,13 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            {
 	                protocol_timestamp_lastaction = now;
 
-	                if (current_state == PX_WPP_IDLE || current_state == PX_WPP_SENDLIST)
+	                if (comm_state == PX_WPP_COMM_IDLE || comm_state == PX_WPP_COMM_SENDLIST)
 	                {
 	                    if (waypoints->size() > 0)
 	                    {
-	                        if (verbose && current_state == PX_WPP_IDLE) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST_LIST from %u changing state to PX_WPP_SENDLIST\n", msg->sysid);
-	                        if (verbose && current_state == PX_WPP_SENDLIST) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST_LIST again from %u staying in state PX_WPP_SENDLIST\n", msg->sysid);
-	                        current_state = PX_WPP_SENDLIST;
+	                        if (verbose && comm_state == PX_WPP_COMM_IDLE) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST_LIST from %u changing state to PX_WPP_COMM_SENDLIST\n", msg->sysid);
+	                        if (verbose && comm_state == PX_WPP_COMM_SENDLIST) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST_LIST again from %u staying in state PX_WPP_COMM_SENDLIST\n", msg->sysid);
+	                        comm_state = PX_WPP_COMM_SENDLIST;
 	                        protocol_current_wp_id = 0;
 	                        protocol_current_partner_systemid = msg->sysid;
 	                        protocol_current_partner_compid = msg->compid;
@@ -1092,7 +1140,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                }
 	                else
 	                {
-	                    if (verbose) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_REQUEST_LIST because i'm doing something else already (state=%i).\n", current_state);
+	                    if (verbose) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_REQUEST_LIST because i'm doing something else already (state=%i).\n", comm_state);
 	                }
 	            }
 	            break;
@@ -1107,13 +1155,13 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                protocol_timestamp_lastaction = now;
 
 	                //ensure that we are in the correct state and that the first request has id 0 and the following requests have either the last id (re-send last waypoint) or last_id+1 (next waypoint)
-	                if ((current_state == PX_WPP_SENDLIST && wpr.seq == 0) || (current_state == PX_WPP_SENDLIST_SENDWPS && (wpr.seq == protocol_current_wp_id || wpr.seq == protocol_current_wp_id + 1) && wpr.seq < waypoints->size()))
+	                if ((comm_state == PX_WPP_COMM_SENDLIST && wpr.seq == 0) || (comm_state == PX_WPP_COMM_SENDLIST_SENDWPS && (wpr.seq == protocol_current_wp_id || wpr.seq == protocol_current_wp_id + 1) && wpr.seq < waypoints->size()))
 	                {
-	                    if (verbose && current_state == PX_WPP_SENDLIST) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST of waypoint %u from %u changing state to PX_WPP_SENDLIST_SENDWPS\n", wpr.seq, msg->sysid);
-	                    if (verbose && current_state == PX_WPP_SENDLIST_SENDWPS && wpr.seq == protocol_current_wp_id + 1) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST of waypoint %u from %u staying in state PX_WPP_SENDLIST_SENDWPS\n", wpr.seq, msg->sysid);
-	                    if (verbose && current_state == PX_WPP_SENDLIST_SENDWPS && wpr.seq == protocol_current_wp_id) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST of waypoint %u (again) from %u staying in state PX_WPP_SENDLIST_SENDWPS\n", wpr.seq, msg->sysid);
+	                    if (verbose && comm_state == PX_WPP_COMM_SENDLIST) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST of waypoint %u from %u changing state to PX_WPP_COMM_SENDLIST_SENDWPS\n", wpr.seq, msg->sysid);
+	                    if (verbose && comm_state == PX_WPP_COMM_SENDLIST_SENDWPS && wpr.seq == protocol_current_wp_id + 1) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST of waypoint %u from %u staying in state PX_WPP_COMM_SENDLIST_SENDWPS\n", wpr.seq, msg->sysid);
+	                    if (verbose && comm_state == PX_WPP_COMM_SENDLIST_SENDWPS && wpr.seq == protocol_current_wp_id) printf("Got MAVLINK_MSG_ID_WAYPOINT_REQUEST of waypoint %u (again) from %u staying in state PX_WPP_COMM_SENDLIST_SENDWPS\n", wpr.seq, msg->sysid);
 
-	                    current_state = PX_WPP_SENDLIST_SENDWPS;
+	                    comm_state = PX_WPP_COMM_SENDLIST_SENDWPS;
 	                    protocol_current_wp_id = wpr.seq;
 	                    send_waypoint(protocol_current_partner_systemid, protocol_current_partner_compid, wpr.seq);
 	                }
@@ -1121,12 +1169,12 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                {
 	                    if (verbose)
 	                    {
-	                        if (!(current_state == PX_WPP_SENDLIST || current_state == PX_WPP_SENDLIST_SENDWPS)) { printf("Ignored MAVLINK_MSG_ID_WAYPOINT_REQUEST because i'm doing something else already (state=%i).\n", current_state); break; }
-	                        else if (current_state == PX_WPP_SENDLIST)
+	                        if (!(comm_state == PX_WPP_COMM_SENDLIST || comm_state == PX_WPP_COMM_SENDLIST_SENDWPS)) { printf("Ignored MAVLINK_MSG_ID_WAYPOINT_REQUEST because i'm doing something else already (state=%i).\n", comm_state); break; }
+	                        else if (comm_state == PX_WPP_COMM_SENDLIST)
 	                        {
 	                            if (wpr.seq != 0) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_REQUEST because the first requested waypoint ID (%u) was not 0.\n", wpr.seq);
 	                        }
-	                        else if (current_state == PX_WPP_SENDLIST_SENDWPS)
+	                        else if (comm_state == PX_WPP_COMM_SENDLIST_SENDWPS)
 	                        {
 	                            if (wpr.seq != protocol_current_wp_id && wpr.seq != protocol_current_wp_id + 1) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_REQUEST because the requested waypoint ID (%u) was not the expected (%u or %u).\n", wpr.seq, protocol_current_wp_id, protocol_current_wp_id+1);
 	                            else if (wpr.seq >= waypoints->size()) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_REQUEST because the requested waypoint ID (%u) was out of bounds.\n", wpr.seq);
@@ -1154,14 +1202,14 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            {
 	                protocol_timestamp_lastaction = now;
 
-	                if (current_state == PX_WPP_IDLE || (current_state == PX_WPP_GETLIST && protocol_current_wp_id == 0))
+	                if (comm_state == PX_WPP_COMM_IDLE || (comm_state == PX_WPP_COMM_GETLIST && protocol_current_wp_id == 0))
 	                {
 	                    if (wpc.count > 0)
 	                    {
-	                        if (verbose && current_state == PX_WPP_IDLE) printf("Got MAVLINK_MSG_ID_WAYPOINT_COUNT (%u) from %u changing state to PX_WPP_GETLIST\n", wpc.count, msg->sysid);
-	                        if (verbose && current_state == PX_WPP_GETLIST) printf("Got MAVLINK_MSG_ID_WAYPOINT_COUNT (%u) again from %u\n", wpc.count, msg->sysid);
+	                        if (verbose && comm_state == PX_WPP_COMM_IDLE) printf("Got MAVLINK_MSG_ID_WAYPOINT_COUNT (%u) from %u changing state to PX_WPP_COMM_GETLIST\n", wpc.count, msg->sysid);
+	                        if (verbose && comm_state == PX_WPP_COMM_GETLIST) printf("Got MAVLINK_MSG_ID_WAYPOINT_COUNT (%u) again from %u\n", wpc.count, msg->sysid);
 
-	                        current_state = PX_WPP_GETLIST;
+	                        comm_state = PX_WPP_COMM_GETLIST;
 	                        protocol_current_wp_id = 0;
 	                        protocol_current_partner_systemid = msg->sysid;
 	                        protocol_current_partner_compid = msg->compid;
@@ -1178,7 +1226,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                    }
 	                    else if (wpc.count == 0)
 	                    {
-	                        printf("got waypoint count of 0, clearing waypoint list and staying in state PX_WPP_IDLE\n");
+	                        printf("got waypoint count of 0, clearing waypoint list and staying in state PX_WPP_COMM_IDLE\n");
 	                        while(waypoints_receive_buffer->size() > 0)
 	                        {
 	                            delete waypoints->back();
@@ -1196,8 +1244,8 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                }
 	                else
 	                {
-	                    if (verbose && !(current_state == PX_WPP_IDLE || current_state == PX_WPP_GETLIST)) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_COUNT because i'm doing something else already (state=%i).\n", current_state);
-	                    else if (verbose && current_state == PX_WPP_GETLIST && protocol_current_wp_id != 0) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_COUNT because i'm already receiving waypoint %u.\n", protocol_current_wp_id);
+	                    if (verbose && !(comm_state == PX_WPP_COMM_IDLE || comm_state == PX_WPP_COMM_GETLIST)) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_COUNT because i'm doing something else already (state=%i).\n", comm_state);
+	                    else if (verbose && comm_state == PX_WPP_COMM_GETLIST && protocol_current_wp_id != 0) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_COUNT because i'm already receiving waypoint %u.\n", protocol_current_wp_id);
 	                    else printf("Ignored MAVLINK_MSG_ID_WAYPOINT_COUNT - FIXME: missed error description\n");
 	                }
 	            }
@@ -1215,21 +1263,21 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                printf("Received WP %3u%s: Frame: %u\tCommand: %3u\tparam1: %6.2f\tparam2: %7.2f\tparam3: %6.2f\tparam4: %7.2f\tX: %7.2f\tY: %7.2f\tZ: %7.2f\tAuto-Cont: %u\t\n", wp.seq, (wp.current?"*":" "), wp.frame, wp.command, wp.param1, wp.param2, wp.param3, wp.param4, wp.x, wp.y, wp.z, wp.autocontinue);
 
 	                //ensure that we are in the correct state and that the first waypoint has id 0 and the following waypoints have the correct ids
-	                if ((current_state == PX_WPP_GETLIST && wp.seq == 0) || (current_state == PX_WPP_GETLIST_GETWPS && wp.seq == protocol_current_wp_id && wp.seq < protocol_current_count))
+	                if ((comm_state == PX_WPP_COMM_GETLIST && wp.seq == 0) || (comm_state == PX_WPP_COMM_GETLIST_GETWPS && wp.seq == protocol_current_wp_id && wp.seq < protocol_current_count))
 	                {
-	                    if (verbose && current_state == PX_WPP_GETLIST) printf("Got MAVLINK_MSG_ID_WAYPOINT %u from %u changing state to PX_WPP_GETLIST_GETWPS\n", wp.seq, msg->sysid);
-	                    if (verbose && current_state == PX_WPP_GETLIST_GETWPS && wp.seq == protocol_current_wp_id) printf("Got MAVLINK_MSG_ID_WAYPOINT %u from %u\n", wp.seq, msg->sysid);
-	                    if (verbose && current_state == PX_WPP_GETLIST_GETWPS && wp.seq-1 == protocol_current_wp_id) printf("Got MAVLINK_MSG_ID_WAYPOINT %u (again) from %u\n", wp.seq, msg->sysid);
+	                    if (verbose && comm_state == PX_WPP_COMM_GETLIST) printf("Got MAVLINK_MSG_ID_WAYPOINT %u from %u changing state to PX_WPP_COMM_GETLIST_GETWPS\n", wp.seq, msg->sysid);
+	                    if (verbose && comm_state == PX_WPP_COMM_GETLIST_GETWPS && wp.seq == protocol_current_wp_id) printf("Got MAVLINK_MSG_ID_WAYPOINT %u from %u\n", wp.seq, msg->sysid);
+	                    if (verbose && comm_state == PX_WPP_COMM_GETLIST_GETWPS && wp.seq-1 == protocol_current_wp_id) printf("Got MAVLINK_MSG_ID_WAYPOINT %u (again) from %u\n", wp.seq, msg->sysid);
 
-	                    current_state = PX_WPP_GETLIST_GETWPS;
+	                    comm_state = PX_WPP_COMM_GETLIST_GETWPS;
 	                    protocol_current_wp_id = wp.seq + 1;
 	                    mavlink_waypoint_t* newwp = new mavlink_waypoint_t;
 	                    memcpy(newwp, &wp, sizeof(mavlink_waypoint_t));
 	                    waypoints_receive_buffer->push_back(newwp);
 
-	                    if(protocol_current_wp_id == protocol_current_count && current_state == PX_WPP_GETLIST_GETWPS)
+	                    if(protocol_current_wp_id == protocol_current_count && comm_state == PX_WPP_COMM_GETLIST_GETWPS)
 	                    {
-	                        if (verbose) printf("Got all %u waypoints, changing state to PX_WPP_IDLE\n", protocol_current_count);
+	                        if (verbose) printf("Got all %u waypoints, changing state to PX_WPP_COMM_IDLE\n", protocol_current_count);
 
 	                        send_waypoint_ack(protocol_current_partner_systemid, protocol_current_partner_compid, 0);
 
@@ -1266,7 +1314,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                            timestamp_firstinside_orbit = 0;
 	                        }
 
-	                        current_state = PX_WPP_IDLE;
+	                        comm_state = PX_WPP_COMM_IDLE;
 	                    }
 	                    else
 	                    {
@@ -1275,21 +1323,21 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                }
 	                else
 	                {
-	                    if (current_state == PX_WPP_IDLE)
+	                    if (comm_state == PX_WPP_COMM_IDLE)
 	                    {
 	                        //we're done receiving waypoints, answer with ack.
 	                        send_waypoint_ack(protocol_current_partner_systemid, protocol_current_partner_compid, 0);
-	                        printf("Received MAVLINK_MSG_ID_WAYPOINT while state=PX_WPP_IDLE, answered with WAYPOINT_ACK.\n");
+	                        printf("Received MAVLINK_MSG_ID_WAYPOINT while state=PX_WPP_COMM_IDLE, answered with WAYPOINT_ACK.\n");
 	                    }
 	                    if (verbose)
 	                    {
-	                        if (!(current_state == PX_WPP_GETLIST || current_state == PX_WPP_GETLIST_GETWPS)) { printf("Ignored MAVLINK_MSG_ID_WAYPOINT %u because i'm doing something else already (state=%i).\n", wp.seq, current_state); break; }
-	                        else if (current_state == PX_WPP_GETLIST)
+	                        if (!(comm_state == PX_WPP_COMM_GETLIST || comm_state == PX_WPP_COMM_GETLIST_GETWPS)) { printf("Ignored MAVLINK_MSG_ID_WAYPOINT %u because i'm doing something else already (state=%i).\n", wp.seq, comm_state); break; }
+	                        else if (comm_state == PX_WPP_COMM_GETLIST)
 	                        {
 	                            if(!(wp.seq == 0)) printf("Ignored MAVLINK_MSG_ID_WAYPOINT because the first waypoint ID (%u) was not 0.\n", wp.seq);
 	                            else printf("Ignored MAVLINK_MSG_ID_WAYPOINT %u - FIXME: missed error description\n", wp.seq);
 	                        }
-	                        else if (current_state == PX_WPP_GETLIST_GETWPS)
+	                        else if (comm_state == PX_WPP_COMM_GETLIST_GETWPS)
 	                        {
 	                            if (!(wp.seq == protocol_current_wp_id)) printf("Ignored MAVLINK_MSG_ID_WAYPOINT because the waypoint ID (%u) was not the expected %u.\n", wp.seq, protocol_current_wp_id);
 	                            else if (!(wp.seq < protocol_current_count)) printf("Ignored MAVLINK_MSG_ID_WAYPOINT because the waypoint ID (%u) was out of bounds.\n", wp.seq);
@@ -1302,7 +1350,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            else
 	            {
 	                //we we're target but already communicating with someone else
-	                if((wp.target_system == systemid && wp.target_component == compid) && !(msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && current_state != PX_WPP_IDLE)
+	                if((wp.target_system == systemid && wp.target_component == compid) && !(msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && comm_state != PX_WPP_COMM_IDLE)
 	                {
 	                    if (verbose) printf("Ignored MAVLINK_MSG_ID_WAYPOINT %u from ID %u because i'm already talking to ID %u.\n", wp.seq, msg->sysid, protocol_current_partner_systemid);
 	                }
@@ -1319,7 +1367,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            mavlink_waypoint_clear_all_t wpca;
 	            mavlink_msg_waypoint_clear_all_decode(msg, &wpca);
 
-	            if(wpca.target_system == systemid && wpca.target_component == compid && current_state == PX_WPP_IDLE)
+	            if(wpca.target_system == systemid && wpca.target_component == compid && comm_state == PX_WPP_COMM_IDLE)
 	            {
 	                protocol_timestamp_lastaction = now;
 
@@ -1332,9 +1380,9 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                //terminate_all_threads();
 	                current_active_wp_id = -1;
 	            }
-	            else if (wpca.target_system == systemid && wpca.target_component == compid && current_state != PX_WPP_IDLE)
+	            else if (wpca.target_system == systemid && wpca.target_component == compid && comm_state != PX_WPP_COMM_IDLE)
 	            {
-	                if (verbose) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_CLEAR_LIST from %u because i'm doing something else already (state=%i).\n", msg->sysid, current_state);
+	                if (verbose) printf("Ignored MAVLINK_MSG_ID_WAYPOINT_CLEAR_LIST from %u because i'm doing something else already (state=%i).\n", msg->sysid, comm_state);
 	            }
 	            break;
 	        }
@@ -1408,7 +1456,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            {
 	                protocol_timestamp_lastaction = now;
 
-	                if (current_state == PX_WPP_IDLE)
+	                if (comm_state == PX_WPP_COMM_IDLE)
 	                {
 	    				switch (command.command)
 	    				{
@@ -1443,12 +1491,32 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	    						break;
 	    					}
 
-	    					default:
+	    				case CMD_HALT:
 	    					{
-	    		        		if (debug) std::cerr << "Waypointplanner: received Command message of unknown type" << std::endl;
-	    		        		send_command_ack(0,3);
-	    		            	break;
-	    		        	}
+	    						if (verbose) printf("Received HALT command.\n");
+
+	    						set_destination(get_wp_of_current_position());
+	    						wpp_state = PX_WPP_ON_HOLD;
+	    						send_command_ack(CMD_HALT,0);
+	    						break;
+	    					}
+
+	    				case CMD_CONTINUE:
+	    					{
+	    						if (verbose) printf("Received CONTINUE command.\n");
+	    						wpp_state = PX_WPP_RUNNING;
+	    						handle_waypoint(current_active_wp_id,now);
+	    						send_command_ack(CMD_CONTINUE,0);
+	    						break;
+	    					}
+
+    					default:
+    					{
+    		        		//if (debug) std::cerr << "Waypointplanner: received Command message of unknown type " << command.command << std::endl;
+    						std::cerr << "Waypointplanner: received Command message of unknown type " << command.command << std::endl;
+    		        		send_command_ack(0,3);
+    		            	break;
+    		        	}
 	    				}
 	                }
 	            }
@@ -1515,10 +1583,10 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
     struct timeval tv;
     gettimeofday(&tv, NULL);
     uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
-    if (now-protocol_timestamp_lastaction > paramClient->getParamValue("PROTTIMEOUT")*1000000 && current_state != PX_WPP_IDLE)
+    if (now-protocol_timestamp_lastaction > paramClient->getParamValue("PROTTIMEOUT")*1000000 && comm_state != PX_WPP_COMM_IDLE)
     {
-        if (verbose) printf("Last operation (state=%u) timed out, changing state to PX_WPP_IDLE\n", current_state);
-        current_state = PX_WPP_IDLE;
+        if (verbose) printf("Last operation (state=%u) timed out, changing state to PX_WPP_COMM_IDLE\n", comm_state);
+        comm_state = PX_WPP_COMM_IDLE;
         protocol_current_count = 0;
         protocol_current_partner_systemid = 0;
         protocol_current_partner_compid = 0;
@@ -1748,7 +1816,7 @@ int main(int argc, char* argv[])
     }
     g_mutex_unlock(main_mutex);
 
-
+    wpp_state = PX_WPP_RUNNING;
     printf("WAYPOINTPLANNER INITIALIZATION DONE, RUNNING...\n");
 
     /**********************************
@@ -1763,7 +1831,6 @@ int main(int argc, char* argv[])
         }
         g_mutex_unlock(main_mutex);
         usleep(paramClient->getParamValue("SETPOINTDELAY")*1000000);
-
     }
 
     /**********************************
