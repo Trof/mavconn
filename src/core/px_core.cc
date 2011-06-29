@@ -117,35 +117,38 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel,co
 	{
 	case MAVLINK_MSG_ID_ACTION:
 	{
-		switch (mavlink_msg_action_get_action(msg))
+		if (mavlink_msg_action_get_target(msg) == systemid)
 		{
-		case MAV_ACTION_SHUTDOWN:
-		{
-			if (verbose) std::cerr << "Shutdown received, shutting down system" << std::endl;
-			mavlink_message_t response;
-			mavlink_sys_status_t status;
-			status.status = MAV_STATE_POWEROFF;
-			status.mode = MAV_MODE_LOCKED;
-			mavlink_msg_sys_status_encode(systemid, compid, &response, &status);
-			mavlink_message_t_publish ((lcm_t*)user, "MAVLINK", &response);
-			if (system ("halt"))
-				if (verbose) std::cerr << "Shutdown failed." << std::endl;
+			switch (mavlink_msg_action_get_action(msg))
+			{
+			case MAV_ACTION_SHUTDOWN:
+			{
+				if (verbose) std::cerr << "Shutdown received, shutting down system" << std::endl;
+				mavlink_message_t response;
+				mavlink_sys_status_t status;
+				status.status = MAV_STATE_POWEROFF;
+				status.mode = MAV_MODE_LOCKED;
+				mavlink_msg_sys_status_encode(systemid, compid, &response, &status);
+				mavlink_message_t_publish ((lcm_t*)user, "MAVLINK", &response);
+				if (system ("halt"))
+					if (verbose) std::cerr << "Shutdown failed." << std::endl;
 
-		}
-		break;
-		case MAV_ACTION_REBOOT:
-		{
-			if (verbose) std::cerr << "Reboot received, rebooting system" << std::endl;
-			mavlink_message_t response;
-			mavlink_sys_status_t status;
-			status.status = MAV_STATE_POWEROFF;
-			status.mode = MAV_MODE_LOCKED;
-			mavlink_msg_sys_status_encode(systemid, compid, &response, &status);
-			mavlink_message_t_publish ((lcm_t*)user, "MAVLINK", &response);
-			if(system ("reboot"))
-				if (verbose) std::cerr << "Reboot failed." << std::endl;
-		}
-		break;
+			}
+			break;
+			case MAV_ACTION_REBOOT:
+			{
+				if (verbose) std::cerr << "Reboot received, rebooting system" << std::endl;
+				mavlink_message_t response;
+				mavlink_sys_status_t status;
+				status.status = MAV_STATE_POWEROFF;
+				status.mode = MAV_MODE_LOCKED;
+				mavlink_msg_sys_status_encode(systemid, compid, &response, &status);
+				mavlink_message_t_publish ((lcm_t*)user, "MAVLINK", &response);
+				if(system ("reboot"))
+					if (verbose) std::cerr << "Reboot failed." << std::endl;
+			}
+			break;
+			}
 		}
 	}
 	break;
