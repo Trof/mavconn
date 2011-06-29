@@ -70,8 +70,8 @@ public:
 	PxSHM();
 	~PxSHM();
 
-	bool init(int key, Type type, int infoPacketSize, int infoQueueLength,
-			  int dataPacketSize, int dataQueueLength);
+	bool init(int key, Type type, int infoMaxPacketSize, int infoQueueLength,
+			  int dataMaxPacketSize, int dataQueueLength);
 
 	int hashKey(const std::string& str) const;
 

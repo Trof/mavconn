@@ -71,10 +71,10 @@ PxSHM::~PxSHM()
 }
 
 bool
-PxSHM::init(int key, PxSHM::Type type, int infoPacketSize, int infoQueueLength,
-			int dataPacketSize, int dataQueueLength)
+PxSHM::init(int key, PxSHM::Type type, int infoMaxPacketSize, int infoQueueLength,
+			int dataMaxPacketSize, int dataQueueLength)
 {
-	if (infoPacketSize <= 0)
+	if (infoMaxPacketSize <= 0)
 	{
 		fprintf(stderr, "# ERROR: Info packet size is invalid.\n");
 		return false;
@@ -84,7 +84,7 @@ PxSHM::init(int key, PxSHM::Type type, int infoPacketSize, int infoQueueLength,
 		fprintf(stderr, "# ERROR: Info queue length is invalid.\n");
 		return false;
 	}
-	if (dataPacketSize <= 0)
+	if (dataMaxPacketSize <= 0)
 	{
 		fprintf(stderr, "# ERROR: Data packet size is invalid.\n");
 		return false;
@@ -95,8 +95,8 @@ PxSHM::init(int key, PxSHM::Type type, int infoPacketSize, int infoQueueLength,
 		return false;
 	}
 
-	i_size = infoPacketSize * infoQueueLength;
-	d_size = dataPacketSize * dataQueueLength;
+	i_size = infoMaxPacketSize * infoQueueLength;
+	d_size = dataMaxPacketSize * dataQueueLength;
 
 	int m, f;
 	this->type = type;
@@ -107,7 +107,7 @@ PxSHM::init(int key, PxSHM::Type type, int infoPacketSize, int infoQueueLength,
 	}
 	else if (type == CLIENT_TYPE)
 	{
-		m = 0666;
+		m = IPC_CREAT | 0666;
 		f = SHM_RDONLY;
 	}
 	else

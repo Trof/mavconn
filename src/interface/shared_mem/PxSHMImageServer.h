@@ -44,6 +44,18 @@ class PxSHMImageServer
 public:
 	PxSHMImageServer();
 	
+	/**
+	 * Initializes the image server.
+	 *
+	 * @param sysid System ID.
+	 * @param compid Component ID.
+	 * @param lcm LCM instance.
+	 * @param cam1 Camera 1. If it is part of a stereo rig, it is the left camera.
+	 * @param cam2 Camera 2. If it is part of a stereo rig, it is the right camera.
+	 * 						 Otherwise, leave the parameter empty.
+	 *
+	 * @return Result of shared memory segment access.
+	 */
 	bool init(int sysid, int compid, lcm_t* lcm,
 			  PxSHM::Camera cam1, PxSHM::Camera cam2 = PxSHM::CAMERA_NONE);
 	

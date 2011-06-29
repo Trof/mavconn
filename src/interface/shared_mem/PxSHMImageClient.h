@@ -44,6 +44,20 @@ class PxSHMImageClient
 public:
 	PxSHMImageClient();
 	
+	/**
+	 * Initializes the image client.
+	 *
+	 * @param subscribeLatest If true, all read functions skip all stored
+	 * 						  images until the most recent image which is
+	 * 						  then returned. Otherwise, the next available
+	 * 						  image is returned; the function has to be called
+	 * 						  quickly enough to avoid overwriting of image data.
+	 * @param cam1 Camera 1. If it is part of a stereo rig, it is the left camera.
+	 * @param cam2 Camera 2. If it is part of a stereo rig, it is the right camera.
+	 * 						 Otherwise, leave the parameter empty.
+	 *
+	 * @return Result of shared memory segment access.
+	 */
 	bool init(bool subscribeLatest,
 			  PxSHM::Camera cam1, PxSHM::Camera cam2 = PxSHM::CAMERA_NONE);
 	
