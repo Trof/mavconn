@@ -67,7 +67,7 @@ bool ready_to_continue = false;			///< this marker is set "true" when all necess
 uint64_t timestamp_lastoutside_orbit = 0;///< timestamp when the MAV was last outside the orbit or had the wrong yaw value
 uint64_t timestamp_firstinside_orbit = 0;///< timestamp when the MAV was the first time after a waypoint change inside the orbit and had the correct yaw value
 uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay command was initiated
-
+bool permission_to_land = false;		 ///< this marker is used for MAV_CMD_NAV_LAND waypoint.
 mav_destination cur_dest;				 ///< current flight destination
 mavlink_local_position_t last_known_pos; ///< latest received position of MAV
 mavlink_attitude_t last_known_att;		 ///< latest received attitude of MAV
@@ -366,6 +366,7 @@ void send_waypoint_reached(uint16_t seq)
 
 void set_destination(mavlink_waypoint_t* wp)
 {
+	// Assume MAV_CMD_NAV_WAYPOINT and set parameters
 	cur_dest.frame = wp->frame;
 	cur_dest.x = wp->x;
 	cur_dest.y = wp->y;
@@ -373,10 +374,12 @@ void set_destination(mavlink_waypoint_t* wp)
 	cur_dest.yaw = wp->param4;
 	cur_dest.rad = wp->param2;
 	cur_dest.holdtime = wp->param1;
+
 	if(wp->command != MAV_CMD_NAV_WAYPOINT)
 	{
 		if (verbose) printf("Warning: New destination coordinates do not origin from MAV_CMD_NAV_WAYPOINT waypoint.\n");
 	}
+
 }
 
 mavlink_waypoint_t* get_wp_of_current_position ()
@@ -478,6 +481,17 @@ void check_if_reached_dest(bool* posReached, bool* yawReached, uint16_t next_wp_
 	}
 }
 
+bool above_landing(mavlink_waypoint_t* land_wp)
+{
+	if ((last_known_pos.x - land_wp->x)*(last_known_pos.x - land_wp->x) + (last_known_pos.y - land_wp->y)*(last_known_pos.y - land_wp->y) <= land_wp->param2)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
 
 uint16_t calculate_sweep_parameters (const mavlink_waypoint_t* sweep_wp, mavlink_local_position_t cur_pos, sweep_parameters* sw)
 {
@@ -783,9 +797,108 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 	    case MAV_CMD_NAV_RETURN_TO_LAUNCH:
 	    	break;
 	    case MAV_CMD_NAV_LAND:
-	    	break;
+	    {
+	    	// generate a waypoint above the landing zone
+	    	mavlink_waypoint_t* land_wp = new mavlink_waypoint_t;
+	    	*land_wp = *cur_wp;
+	    	land_wp->command = MAV_CMD_NAV_WAYPOINT;
+	    	land_wp->param1 = 5.0;		// Per definition, there is a 5.0 sec delay before landing
+	    	land_wp->param2 = 0.15;		// Per definition, acceptance radius for land waypoint is 0.15m
+	    	//land_wp->param4 = cur_dest.yaw; // Yaw is not specified, so taking the value from last waypoint;
+	    	if (permission_to_land == true)
+	    	{
+	    		if(above_landing(land_wp)==true)
+	    		{
+	    			// Set z-value to 0 to initiate landing procedure.
+	    			land_wp->z = 0;
+	    			set_destination(land_wp);
+	    			break;
+	    		}
+	    		else
+	    		{
+	    			if (verbose) printf("Had permission to land, but was not above the landing zone (must be within %.2f meters from (%.2f,%.2f) on x-y plane)\n", land_wp->param2, land_wp->x,land_wp->y);
+	    			permission_to_land = false;
+	    		}
+	    	}
+
+    		set_destination(land_wp);
+
+	    	bool yawReached = false;						///< boolean for yaw attitude reached
+	    	bool posReached = false;						///< boolean for position reached
+
+            // compare last known position with current destination
+            check_if_reached_dest(&posReached, &yawReached, seq);
+
+            //check if the current waypoint was reached
+            if (posReached && yawReached)
+            {
+            	if (timestamp_firstinside_orbit == 0)
+            	{
+            	     // Announce that last waypoint was reached
+            		 if (verbose) printf("*** Reached a checkpoint above the landing zone. ***\n");
+    	             send_waypoint_reached(cur_wp->seq);
+         	         timestamp_firstinside_orbit = now;
+         	    }
+            	// check if the MAV was long enough inside the waypoint orbit
+	            if(now-timestamp_firstinside_orbit >= 5.0*1000000)
+	            {
+	            	if (verbose) printf("*** Landing permission granted. ***\n");
+            		permission_to_land = true;
+	            	timestamp_firstinside_orbit = 0;
+	            }
+    	    }
+    	    else
+    	    {
+    	        timestamp_lastoutside_orbit = now;
+    	    }
+
+	    	// WARNING: this waypoint is intended to finish the flight. WPP will not proceed to the next waypoint, unless "current wp" is changed manually from QGroundControl.
+	    	// ready_to_continue = true;
+	    	// next_wp_id = seq+1;
+
+    	    break;
+
+	    }
 	    case MAV_CMD_NAV_TAKEOFF:
-	    	break;
+	    {
+	    	// generate a waypoint above the takeoff zone
+	    	mavlink_waypoint_t* takeoff_wp = new mavlink_waypoint_t;
+	    	*takeoff_wp = *cur_wp;
+	    	takeoff_wp->command = MAV_CMD_NAV_WAYPOINT;
+	    	takeoff_wp->param1 = 5.0;	// Per definition, takeoff includes a 5.0 sec delay after reaching desired height.
+	    	takeoff_wp->param2 = 0.15;
+	    	set_destination(takeoff_wp);
+
+	    	bool yawReached = false;						///< boolean for yaw attitude reached
+	    	bool posReached = false;						///< boolean for position reached
+
+            next_wp_id = seq+1;
+            // compare last known position with current destination
+            check_if_reached_dest(&posReached, &yawReached, next_wp_id);
+
+            //check if the current waypoint was reached
+            if (posReached && yawReached)
+            {
+            	if (timestamp_firstinside_orbit == 0)
+            	{
+            	     // Announce that last waypoint was reached
+    	             send_waypoint_reached(cur_wp->seq);
+         	         timestamp_firstinside_orbit = now;
+         	    }
+            	// check if the MAV was long enough inside the waypoint orbit
+	            if(now-timestamp_firstinside_orbit >= takeoff_wp->param1*1000000)
+	            {
+	            	if (verbose) printf("*** Takeoff complete ***\n");
+	            	ready_to_continue = true;
+	            	timestamp_firstinside_orbit = 0;
+	            }
+    	    }
+    	    else
+    	    {
+    	        timestamp_lastoutside_orbit = now;
+    	    }
+    	    break;
+	    }
 	    case MAV_CMD_NAV_LAST:
 	    	break;
 	    case MAV_CMD_CONDITION_DELAY:
@@ -989,7 +1102,7 @@ void handle_waypoint (uint16_t seq, uint64_t now)
 		    	ready_to_continue = true;
 		    	break;
 	    	}
-	    	else if (sweep_state = PX_WPP_SWEEP_RUNNING)
+	    	else if (sweep_state == PX_WPP_SWEEP_RUNNING)
 	    	{
 	    		set_destination(next_sweep_wp);
 	    	}
