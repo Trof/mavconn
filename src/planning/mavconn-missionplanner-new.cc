@@ -748,7 +748,7 @@ void* sweep_thread_func (gpointer sweep_wp)
 
 void handle_mission (uint16_t seq, uint64_t now)
 {
-	//if (debug) printf("Started executing waypoint(%u)...\n",seq);
+	if (debug) printf("Started executing waypoint(%u)...\n",seq);
 
 	if (seq < waypoints->size() && wpp_state == PX_WPP_RUNNING)
 	{
@@ -1149,9 +1149,9 @@ void handle_mission (uint16_t seq, uint64_t now)
 	}
 	else // wpp_state != PX_WPP_RUNNING
 	{
-		//if (verbose) printf("Waypoint not executed, waypointplanner not in running state.\n");
+		if (debug) printf("Waypoint not executed, waypointplanner not in running state.\n");
 	}
-	//if (debug) printf("Finished executing waypoint(%u)...\n",seq);
+	if (debug) printf("Finished executing waypoint(%u)...\n",seq);
 	timestamp_last_handle_mission = now;
 
 }
@@ -1638,49 +1638,10 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 
 				break;
 			}
-//	    case MAVLINK_MSG_ID_ACTION: // special action from ground station
-//	        {
-//	            mavlink_action_t action;
-//	            mavlink_msg_action_decode(msg, &action);
-//	            if(action.target == systemid)
-//	            {
-//	                if (verbose) std::cerr << "Waypoint: received message with action " << action.action << std::endl;
-//	                switch (action.action)
-//	                {
-//	                    //				case MAV_ACTION_LAUNCH:
-//	                    //					if (verbose) std::cerr << "Launch received" << std::endl;
-//	                    //					current_active_wp_id = 0;
-//	                    //					if (waypoints->size()>0)
-//	                    //					{
-//	                    //						setActive(waypoints[current_active_wp_id]);
-//	                    //					}
-//	                    //					else
-//	                    //						if (verbose) std::cerr << "No launch, waypointList empty" << std::endl;
-//	                    //					break;
-//
-//	                    //				case MAV_ACTION_CONTINUE:
-//	                    //					if (verbose) std::c
-//	                    //					err << "Continue received" << std::endl;
-//	                    //					idle = false;
-//	                    //					setActive(waypoints[current_active_wp_id]);
-//	                    //					break;
-//
-//	                    //				case MAV_ACTION_HALT:
-//	                    //					if (verbose) std::cerr << "Halt received" << std::endl;
-//	                    //					idle = true;
-//	                    //					break;
-//
-//	                    //				default:
-//	                    //					if (verbose) std::cerr << "Unknown action received with id " << action.action << ", no action taken" << std::endl;
-//	                    //					break;
-//	                }
-//	            }
-//	            break;
-//	        }
 
 		default:
         {
-            if (debug) std::cerr << "Waypoint: received message of unknown type" << std::endl;
+            if (debug) std::cerr << "Waypoint: received message of unknown type:" << msg->msgid << std::endl;
             break;
         }
 
@@ -1908,6 +1869,7 @@ int main(int argc, char* argv[])
         }
         wpfile.close();
 
+        wpp_state = PX_WPP_RUNNING;
         struct timeval tv;
         gettimeofday(&tv, NULL);
         uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
@@ -1933,7 +1895,6 @@ int main(int argc, char* argv[])
     }
     g_mutex_unlock(main_mutex);
 
-    wpp_state = PX_WPP_RUNNING;
     printf("WAYPOINTPLANNER INITIALIZATION DONE, RUNNING...\n");
 
     /**********************************
