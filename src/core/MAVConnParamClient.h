@@ -121,10 +121,11 @@ public:
 				sendMAVLinkMessage(lcm, &response);
 			}
 		}
-		case MAVLINK_MSG_ID_COMMAND_SHORT:
+		break;
+		case MAVLINK_MSG_ID_COMMAND_LONG:
 		{
-			mavlink_command_short_t action;
-			mavlink_msg_command_short_decode(msg, &action);
+			mavlink_command_long_t action;
+			mavlink_msg_command_long_decode(msg, &action);
 			switch (action.command)
 			{
 			case MAV_CMD_PREFLIGHT_STORAGE:

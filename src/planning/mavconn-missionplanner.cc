@@ -403,10 +403,10 @@ static void mavlink_handler(const lcm_recv_buf_t *rbuf, const char * channel, co
             break;
         }
 
-    case MAVLINK_MSG_ID_COMMAND_SHORT: // special action from ground station
+    case MAVLINK_MSG_ID_COMMAND_LONG: // special action from ground station
         {
-            mavlink_command_short_t action;
-            mavlink_msg_command_short_decode(msg, &action);
+            mavlink_command_long_t action;
+            mavlink_msg_command_long_decode(msg, &action);
             if(action.target_system == systemid)
             {
                 if (verbose) std::cerr << "Waypoint: received message with command " << action.command << std::endl;

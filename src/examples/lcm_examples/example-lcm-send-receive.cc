@@ -57,10 +57,10 @@ mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel,
 	{
 	uint32_t receiveTime;
 	uint32_t sendTime;
-	case MAVLINK_MSG_ID_COMMAND_SHORT:
+	case MAVLINK_MSG_ID_COMMAND_LONG:
 	{
-		mavlink_command_short_t cmd;
-		mavlink_msg_command_short_decode(msg, &cmd);
+		mavlink_command_long_t cmd;
+		mavlink_msg_command_long_decode(msg, &cmd);
 		printf("Message ID: %d\n", msg->msgid);
 		printf("Command ID: %d\n", cmd.command);
 		printf("Target System ID: %d\n", cmd.target_system);

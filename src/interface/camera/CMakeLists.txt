@@ -6,6 +6,7 @@ INCLUDE_DIRECTORIES(.
   ${GTHREAD2_MAIN_INCLUDE_DIR}
   ${SIGC++_INCLUDE_DIR}
   ${DC_INCLUDE_DIR}
+  ${DC_INCLUDE_DIR}/../
   ../../external/mvimpact
 )
 

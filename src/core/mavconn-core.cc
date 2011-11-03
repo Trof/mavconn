@@ -123,10 +123,10 @@ static void mavlink_handler(const lcm_recv_buf_t *rbuf, const char * channel,con
 
 	switch(msg->msgid)
 	{
-	case MAVLINK_MSG_ID_COMMAND_SHORT:
+	case MAVLINK_MSG_ID_COMMAND_LONG:
 	{
-		mavlink_command_short_t cmd;
-		mavlink_msg_command_short_decode(msg, &cmd);
+		mavlink_command_long_t cmd;
+		mavlink_msg_command_long_decode(msg, &cmd);
 		if (cmd.target_system == getSystemID())
 		{
 			switch (cmd.command)
@@ -169,11 +169,6 @@ static void mavlink_handler(const lcm_recv_buf_t *rbuf, const char * channel,con
 		}
 	}
 	break;
-	case MAVLINK_MSG_ID_COMMAND_LONG:
-		{
-
-		}
-		break;
 	case MAVLINK_MSG_ID_HEARTBEAT:
 	{
 		switch(mavlink_msg_heartbeat_get_type(msg))

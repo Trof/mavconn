@@ -1561,10 +1561,10 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 				}
 				break;
 			}
-		case MAVLINK_MSG_ID_COMMAND_SHORT:
+		case MAVLINK_MSG_ID_COMMAND_LONG:
 			{
-				mavlink_command_short_t command;
-				mavlink_msg_command_short_decode(msg, &command);
+				mavlink_command_long_t command;
+				mavlink_msg_command_long_decode(msg, &command);
 
 
 	            if(command.target_system == systemid && command.target_component == compid)

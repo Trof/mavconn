@@ -65,11 +65,11 @@ main (int argc, char ** argv)
 
 		mavlink_message_t msg;
 		// Pack the liftoff action message into this space, ready for sending
-		mavlink_command_short_t action;
+		mavlink_command_long_t action;
 		action.command = MAV_CMD_NAV_LAND;
 		action.target_system = 1; // Send command to MAV 001
 		action.target_component = PX_COMP_ID_ALL;
-		mavlink_msg_command_short_encode(systemID, 0, &msg, &action);
+		mavlink_msg_command_long_encode(systemID, 0, &msg, &action);
 
 		// Publish the message on the LCM IPC bus
 		sendMAVLinkMessage(lcm, &msg);
