@@ -1550,7 +1550,9 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 				mavlink_pattern_detected_t pd;
 				mavlink_msg_pattern_detected_decode(msg, &pd);
 				if (debug) printf("Pattern - conf: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
-				std::string SEARCH_PIC = image_list->at(0);
+				std::string SEARCH_PIC;
+				SEARCH_PIC = image_list->at(0);
+				if (debug) printf("Searching for file: %s. Result: %i\n",SEARCH_PIC.c_str(), strcmp((char*)pd.file,(char*)SEARCH_PIC.c_str()));
 				if (search_state != PX_WPP_SEARCH_IDLE)
 				{
 					if(pd.detected==1 && strcmp((char*)pd.file,SEARCH_PIC.c_str()) == 0 && pd.confidence >= min_conf)
