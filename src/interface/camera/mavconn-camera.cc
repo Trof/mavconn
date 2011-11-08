@@ -462,7 +462,7 @@ int main(int argc, char* argv[])
 			exit(EXIT_FAILURE);
 		}
 
-		pxCam->setConfig(config);
+		//pxCam->setConfig(config);
 
 		if (!pxCam->start())
 		{

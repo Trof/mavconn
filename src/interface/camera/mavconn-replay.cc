@@ -122,13 +122,13 @@ int main(int argc, char* argv[])
 	if(imagepath_left.length() == 0)
 	{
 		imagepath_left = logfile.substr(0, logfile.length()-8) + "/left";
-		printf("Left images stream path not speciefied, trying %s\n", imagepath_left.c_str());
+		printf("Left images stream path not specified, trying %s\n", imagepath_left.c_str());
 	}
 
 	if(imagepath_right.length() == 0)
 	{
 		imagepath_right = logfile.substr(0, logfile.length()-8) + "/right";
-		printf("Right images stream path not speciefied, trying %s\n", imagepath_right.c_str());
+		printf("Right images stream path not specified, trying %s\n", imagepath_right.c_str());
 	}
 
 	// ----- Setting up communication and data for images

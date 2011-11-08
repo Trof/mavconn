@@ -195,7 +195,7 @@ enum TPROPHANDLING_ERROR
 	///
 	/// The caller tried to read a value from an invalid index from a property.
 	/// Most properties store one value only, thus the only valid positive value
-	/// index will be 0 (some negativ index values are reserved for special
+	/// index will be 0 (some negative index values are reserved for special
 	/// values like e.g. the min/max value of a property). However some properties
 	/// might store more then one value, thus the max. allowed index might
 	/// be higher. The highest index allowed will always be the value count 
@@ -384,15 +384,15 @@ enum TComponentFlag
 	/// \brief Allows combinations of translation dictionary entry as valid values.
 	///
 	/// If this flag is set for a property that defines a translation dictionary not
-	/// only values, which are registered in the translation dictionary are allowed 
-	/// values for this property, but also values logical OR-ed together with values from 
+	/// only values, which are registered in the translation dictionary are allowed
+	/// values for this property, but also values logical OR-ed together with values from
 	/// the translation dictionary (these obviously can't be set as strings).
 	///
 	/// A property defines two entries ("one", 1) and ("two", 2) then 1 | 2 = 3 will be a
 	/// valid value as well, but "three" obviously won't.
 	///
 	/// In a GUI application a property specifying this flag should be displayed
-	/// as a set of checkbox controls (one for each dictionary entry) or something
+	/// as a set of check-box controls (one for each dictionary entry) or something
 	/// similar.
 	///
 	/// \note
@@ -414,8 +414,8 @@ enum TComponentFlag
 	/// whether it has been built while deriving or cloning a list and thus the components
 	/// within this list and it's sub-lists.
 	///
-	/// This will change the behaviour to that effect that changing the parent component 
-	/// will no longer affect the 'derived' component. However this allows to define 
+	/// This will change the behaviour to that effect that changing the parent component
+	/// will no longer affect the 'derived' component. However this allows to define
 	/// different default values, constants and translation dictionaries for properties
 	/// within an inheritance hierarchy.
 	///

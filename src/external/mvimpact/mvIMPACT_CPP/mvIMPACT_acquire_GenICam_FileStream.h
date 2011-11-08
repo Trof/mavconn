@@ -36,19 +36,18 @@ class FileProtocolAdapter
 						/// Alignment
 						const int64_type i )
 	{
-		if( i==1 )
-		{
-			return v;
-		}
-		else if( i>1 )
+		if( i > 1 )
 		{
 			int64_type r = (v+(i-1))/i;
 			return r*i;
 		}
-		std::ostringstream oss;
-		oss << "Unexpected increment " << i;
-		ExceptionFactory::raiseException( __FUNCTION__, __LINE__, DMR_INVALID_PARAMETER, INVALID_ID, oss.str() );
-		return 0;
+		else if( i < 1 )
+		{
+			std::ostringstream oss;
+			oss << "Unexpected increment " << i;
+			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, DMR_INVALID_PARAMETER, INVALID_ID, oss.str() );
+		}
+		return v;
 	}
 public:
 	/// \brief Constructor
@@ -80,9 +79,9 @@ public:
 		locator.bindComponent( m_ptrFileOperationStatus, "FileOperationStatus" );
 		locator.bindComponent( m_ptrFileOperationResult, "FileOperationResult" );
 		locator.bindComponent( m_ptrFileSize, "FileSize" );
-		return m_ptrFileSelector.isValid() && m_ptrFileOperationSelector.isValid() && m_ptrFileOperationExecute.isValid() &&
-			m_ptrFileOpenMode.isValid() && m_ptrFileAccessBuffer.isValid() && m_ptrFileAccessOffset.isValid() &&
-			m_ptrFileAccessLength.isValid() && m_ptrFileOperationStatus.isValid() && m_ptrFileOperationResult.isValid();
+		return m_ptrFileAccessBuffer.isValid() && m_ptrFileAccessLength.isValid() && m_ptrFileAccessOffset.isValid() &&
+			m_ptrFileOpenMode.isValid() && m_ptrFileOperationExecute.isValid() && m_ptrFileOperationResult.isValid() &&
+			m_ptrFileOperationSelector.isValid() && m_ptrFileOperationStatus.isValid() &&m_ptrFileSelector.isValid();
 	}
 	/// \brief Open a file on the device
 	///
@@ -277,7 +276,7 @@ public:
 		// catch and dump all exceptions - we're in a desctructor...
 		try
 		{
-			close();
+			this->close();
 		} catch(...) {}
 	}
 	filebuf_type* open(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
@@ -325,7 +324,7 @@ public:
 	filebuf_type* close( void )
 	{
 		filebuf_type* ret = 0;
-		if( is_open() )
+		if( this->is_open() )
 		{
 			if( m_pAdapter->closeFile( m_file ) )
 			{
@@ -413,7 +412,7 @@ public:
 	ODevFileStreamBuf() : m_file(0), m_pAdapter(0), m_fpos(0) {}
 	~ODevFileStreamBuf()
 	{
-		close();
+		this->close();
 	}
 	filebuf_type* open(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
 						mvIMPACT::acquire::Device* pDev,
@@ -545,7 +544,7 @@ public:
 #if defined (_MSC_VER)
 	ODevFileStreamBase() : ostream_type(std::_Noinit), m_streambuf()
 	{
-		init( &m_streambuf );
+		this->init( &m_streambuf );
 	}
 	ODevFileStreamBase(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
 						mvIMPACT::acquire::Device* pDev,
@@ -554,13 +553,13 @@ public:
 						/// File open mode
 						std::ios_base::openmode mode = std::ios_base::out|std::ios_base::trunc ) : ostream_type(std::_Noinit), m_streambuf()
 	{
-		init( &m_streambuf );
-		open( pDev, pFileName, mode );
+		this->init( &m_streambuf );
+		this->open( pDev, pFileName, mode );
 	}
 #elif defined (__GNUC__)
 	ODevFileStreamBase() : ostream_type(), m_streambuf()
 	{
-		init( &m_streambuf );
+		this->init( &m_streambuf );
 	}
 	ODevFileStreamBase(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
 						mvIMPACT::acquire::Device* pDev,
@@ -569,8 +568,8 @@ public:
 						/// File open mode
 						std::ios_base::openmode mode = std::ios_base::out|std::ios_base::trunc ) : ostream_type(), m_streambuf()
 	{
-		init( &m_streambuf );
-		open( pDev, pFileName, mode );
+		this->init( &m_streambuf );
+		this->open( pDev, pFileName, mode );
 	}
 #else
 #	error Unknown C++ library
@@ -593,11 +592,11 @@ public:
 	{
 		if( !m_streambuf.open( pDev, pFileName, mode ) )
 		{
-			setstate(std::ios_base::failbit);
+			this->setstate(std::ios_base::failbit);
 		}
 		else
 		{
-			clear();
+			this->clear();
 		}
 	}
 	/// \brief Close the file on device
@@ -605,7 +604,7 @@ public:
 	{
 		if( !m_streambuf.close() )
 		{
-			setstate( std::ios_base::failbit );
+			this->setstate( std::ios_base::failbit );
 		}
 	}
 };
@@ -626,7 +625,7 @@ public:
 #if defined (_MSC_VER)
 	IDevFileStreamBase() : istream_type(std::_Noinit), m_streambuf()
 	{
-		init( &m_streambuf );
+		this->init( &m_streambuf );
 	}
 	IDevFileStreamBase(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
 						mvIMPACT::acquire::Device* pDev,
@@ -635,13 +634,13 @@ public:
 						/// File open mode
 						std::ios_base::openmode mode = std::ios_base::in ) : istream_type(std::_Noinit), m_streambuf()
 	{
-		init( &m_streambuf );
-		open( pDev, pFileName, mode );
+		this->init( &m_streambuf );
+		this->open( pDev, pFileName, mode );
 	}
 #elif defined (__GNUC__)
 	IDevFileStreamBase() : istream_type(), m_streambuf()
 	{
-		init(&m_streambuf);
+		this->init(&m_streambuf);
 	}
 	IDevFileStreamBase(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
 						mvIMPACT::acquire::Device* pDev,
@@ -650,8 +649,8 @@ public:
 						/// File open mode
 						std::ios_base::openmode mode = std::ios_base::in ) : istream_type(), m_streambuf()
 	{
-		init( &m_streambuf );
-		open( pDev, pFileName, mode );
+		this->init( &m_streambuf );
+		this->open( pDev, pFileName, mode );
 	}
 #else
 #	error Unknown C++ library
@@ -673,11 +672,11 @@ public:
 	{
 		if( !m_streambuf.open( pDev,pFileName, mode ) )
 		{
-			setstate( std::ios_base::failbit );
+			this->setstate( std::ios_base::failbit );
 		}
 		else
 		{
-			clear();
+			this->clear();
 		}
 	}
 	/// \brief Close the file on the device
@@ -685,7 +684,7 @@ public:
 	{
 		if( !m_streambuf.close() )
 		{
-			setstate( std::ios_base::failbit );
+			this->setstate( std::ios_base::failbit );
 		}
 	}
 	/// \brief Returns the size of the file on the device

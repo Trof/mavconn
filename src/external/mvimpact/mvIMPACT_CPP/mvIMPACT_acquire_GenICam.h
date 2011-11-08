@@ -106,6 +106,8 @@ public:
 			deviceSerialPortSelector(),
 			deviceSerialPortBaudRate(),
 			deviceScanType(),
+			timestamp(),
+			timestampReset(),
 			mvDeviceTemperatureUpperLimit(),
 			mvDeviceTemperatureLowerLimit(),
 			mvDeviceTemperatureLimitHysteresis(),
@@ -117,6 +119,8 @@ public:
 			mvDeviceFirmwareSource()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( deviceVendorName, "DeviceVendorName" );
 		locator.bindComponent( deviceModelName, "DeviceModelName" );
 		locator.bindComponent( deviceManufacturerInfo, "DeviceManufacturerInfo" );
@@ -148,6 +152,8 @@ public:
 		locator.bindComponent( deviceSerialPortSelector, "DeviceSerialPortSelector" );
 		locator.bindComponent( deviceSerialPortBaudRate, "DeviceSerialPortBaudRate" );
 		locator.bindComponent( deviceScanType, "DeviceScanType" );
+		locator.bindComponent( timestamp, "Timestamp" );
+		locator.bindComponent( timestampReset, "TimestampReset@i" );
 		locator.bindComponent( mvDeviceTemperatureUpperLimit, "mvDeviceTemperatureUpperLimit" );
 		locator.bindComponent( mvDeviceTemperatureLowerLimit, "mvDeviceTemperatureLowerLimit" );
 		locator.bindComponent( mvDeviceTemperatureLimitHysteresis, "mvDeviceTemperatureLimitHysteresis" );
@@ -179,17 +185,17 @@ public:
 	///
 	/// Version of the firmware in the device.
 	PropertyS deviceFirmwareVersion;
-	/// \brief Major Version of the Standard Feature Naming Convention that was used to create the device`s XML.
+	/// \brief Major Version of the Standard Features Naming Convention that was used to create the device`s XML.
 	///
-	/// Major Version of the Standard Feature Naming Convention that was used to create the device`s XML.
+	/// Major Version of the Standard Features Naming Convention that was used to create the device`s XML.
 	PropertyI64 deviceSFNCVersionMajor;
-	/// \brief Minor Version of the Standard Feature Naming Convention that was used to create the device`s XML.
+	/// \brief Minor Version of the Standard Features Naming Convention that was used to create the device`s XML.
 	///
-	/// Minor Version of the Standard Feature Naming Convention that was used to create the device`s XML
+	/// Minor Version of the Standard Features Naming Convention that was used to create the device`s XML.
 	PropertyI64 deviceSFNCVersionMinor;
-	/// \brief Sub Minor Version of Standard Feature Naming Convention that was used to create the device`s XML.
+	/// \brief Sub Minor Version of Standard Features Naming Convention that was used to create the device`s XML.
 	///
-	/// Sub Minor Version of Standard Feature Naming Convention that was used to create the device`s XML.
+	/// Sub Minor Version of Standard Features Naming Convention that was used to create the device`s XML.
 	PropertyI64 deviceSFNCVersionSubMinor;
 	/// \brief Selects the manifest entry to reference.
 	///
@@ -275,34 +281,52 @@ public:
 	///
 	/// Selects which device serial port to control.
 	PropertyI64 deviceSerialPortSelector;
-	/// \brief This feature controls the baud rate used by the selected device's serial port.
+	/// \brief This feature controls the baud rate used by the selected serial port.
 	///
-	/// This feature controls the baud rate used by the selected device's serial port. Typical values listed should be used whenever possible. Arbitrary values can also be used by defining new enumeration entries.
+	/// This feature controls the baud rate used by the selected serial port. Typical values listed should be used whenever possible. Arbitrary values can also be used by defining new enumeration entries.
 	PropertyI64 deviceSerialPortBaudRate;
 	/// \brief Scan type of the sensor of the device.
 	///
 	/// Scan type of the sensor of the device.
 	PropertyI64 deviceScanType;
+	/// \brief Reports the current value of the device timestamp counter.
+	///
+	/// Reports the current value of the device timestamp counter.
+	PropertyI64 timestamp;
+	/// \brief Resets the current value of the device timestamp counter.
+	///
+	/// Resets the current value of the device timestamp counter.
+	Method timestampReset;
+	/// \brief Upper limit in degrees Celsius(C) for the TemperatureOutOfRange signal.
 	///
 	/// Upper limit in degrees Celsius(C) for the TemperatureOutOfRange signal.
 	PropertyI64 mvDeviceTemperatureUpperLimit;
+	/// \brief Lower limit in degrees Celsius(C) for the TemperatureOutOfRange signal.
 	///
 	/// Lower limit in degrees Celsius(C) for the TemperatureOutOfRange signal.
 	PropertyI64 mvDeviceTemperatureLowerLimit;
+	/// \brief Hysteresis in degrees Celsius(C) for temperature limits.
 	///
 	/// Hysteresis in degrees Celsius(C) for temperature limits.
 	PropertyI64 mvDeviceTemperatureLimitHysteresis;
+	/// \brief Clock frequency of the image sensor of the camera.
+	///
+	/// Clock frequency of the image sensor of the camera.
 	PropertyI64 mvDeviceClockFrequency;
 	PropertyI64 mvDeviceClockGranularity;
+	/// \brief Shows the name of the sensor.
 	///
 	/// Shows the name of the sensor.
 	PropertyS mvDeviceSensorName;
+	/// \brief Shows color mode of the sensor.
 	///
 	/// Shows color mode of the sensor.
 	PropertyI64 mvDeviceSensorColorMode;
+	/// \brief Shows version number of the FPGA.
 	///
 	/// Shows version number of the FPGA.
 	PropertyS mvDeviceFPGAVersion;
+	/// \brief Shows the location from where the firmware was loaded.
 	///
 	/// Shows the location from where the firmware was loaded.
 	PropertyI64 mvDeviceFirmwareSource;
@@ -339,6 +363,8 @@ public:
 	PropertyI64 getDeviceSerialPortSelector( void ) const { return deviceSerialPortSelector; }
 	PropertyI64 getDeviceSerialPortBaudRate( void ) const { return deviceSerialPortBaudRate; }
 	PropertyI64 getDeviceScanType( void ) const { return deviceScanType; }
+	PropertyI64 getTimestamp( void ) const { return timestamp; }
+	Method getTimestampReset( void ) const { return timestampReset; }
 	PropertyI64 getmvDeviceTemperatureUpperLimit( void ) const { return mvDeviceTemperatureUpperLimit; }
 	PropertyI64 getmvDeviceTemperatureLowerLimit( void ) const { return mvDeviceTemperatureLowerLimit; }
 	PropertyI64 getmvDeviceTemperatureLimitHysteresis( void ) const { return mvDeviceTemperatureLimitHysteresis; }
@@ -395,6 +421,8 @@ public:
 			testImageSelector()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( sensorWidth, "SensorWidth" );
 		locator.bindComponent( sensorHeight, "SensorHeight" );
 		locator.bindComponent( sensorTaps, "SensorTaps" );
@@ -443,23 +471,23 @@ public:
 	PropertyI64 widthMax;
 	/// \brief Maximum height (in pixels) of the image.
 	///
-	/// Maximum height (in pixels) of the image. This dimension is calculated after vertical binning, decimation or any other function changing the vertical dimension of the image.
+	/// Maximum height (in pixels) of the image. This dimension is calculated after vertical binning, decimation or any other function changing the vertical dimension of the image
 	PropertyI64 heightMax;
-	/// \brief Width of the Image provided by the device (in pixels).
+	/// \brief Width of the image provided by the device (in pixels).
 	///
-	/// Width of the Image provided by the device (in pixels).
+	/// Width of the image provided by the device (in pixels).
 	PropertyI64 width;
 	/// \brief Height of the image provided by the device (in pixels).
 	///
 	/// Height of the image provided by the device (in pixels).
 	PropertyI64 height;
-	/// \brief Horizontal offset from the origin to the area of interest (in pixels).
+	/// \brief Horizontal offset from the origin to the region of interest (in pixels).
 	///
-	/// Horizontal offset from the origin to the area of interest (in pixels).
+	/// Horizontal offset from the origin to the region of interest (in pixels).
 	PropertyI64 offsetX;
-	/// \brief Vertical offset from the origin to the area of interest (in pixels).
+	/// \brief Vertical offset from the origin to the region of interest (in pixels).
 	///
-	/// Vertical offset from the origin to the area of interest (in pixels).
+	/// Vertical offset from the origin to the region of interest (in pixels).
 	PropertyI64 offsetY;
 	/// \brief Total number of bytes between 2 successive lines.
 	///
@@ -479,15 +507,15 @@ public:
 	PropertyI64 decimationHorizontal;
 	/// \brief Vertical sub-sampling of the image.
 	///
-	/// Vertical sub-sampling of the image. This has the net effect of reducing the vertical resolution (height) of the image by the specified vertical decimation factor.
+	/// Vertical sub-sampling of the image. This reduces the vertical resolution (height) of the image by the specified vertical decimation factor.
 	PropertyI64 decimationVertical;
 	/// \brief Flip horizontally the image sent by the device.
 	///
-	/// Flip horizontally the image sent by the device. The AOI is applied after the flipping.
+	/// Flip horizontally the image sent by the device. The ROI is applied after the flipping.
 	PropertyIBoolean reverseX;
 	/// \brief Flip vertically the image sent by the device.
 	///
-	/// Flip vertically the image sent by the device. The AOI is applied after the flipping.
+	/// Flip vertically the image sent by the device. The ROI is applied after the flipping.
 	PropertyIBoolean reverseY;
 	/// \brief Format of the pixel provided by the device.
 	///
@@ -513,9 +541,9 @@ public:
 	///
 	/// Maximum value that will be returned during the digitization process. This corresponds to the brightest value of the camera. For color camera, this returns the biggest value that each color component can take.
 	PropertyI64 pixelDynamicRangeMax;
-	/// \brief Selects the type of test image that is sent by the camera.
+	/// \brief Selects the type of test image that is sent by the device.
 	///
-	/// Selects the type of test image that is sent by the camera.
+	/// Selects the type of test image that is sent by the device.
 	PropertyI64 testImageSelector;
 	PYTHON_ONLY(%mutable;)
 #ifdef DOTNET_ONLY_CODE
@@ -570,6 +598,7 @@ public:
 			acquisitionAbort(),
 			acquisitionArm(),
 			acquisitionFrameCount(),
+			acquisitionBurstFrameCount(),
 			acquisitionFrameRate(),
 			acquisitionFrameRateAbs(),
 			acquisitionFrameRateRaw(),
@@ -608,18 +637,22 @@ public:
 			mvExposureAutoOffsetY(),
 			mvExposureAutoWidth(),
 			mvExposureAutoHeight(),
+			mvSmearReduction(),
 			mvAcquisitionMemoryMode(),
 			mvPretriggerFrameCount(),
 			mvAcquisitionMemoryMaxFrameCount(),
 			mvAcquisitionMemoryAOIParameterChanged()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( acquisitionMode, "AcquisitionMode" );
 		locator.bindComponent( acquisitionStart, "AcquisitionStart@i" );
 		locator.bindComponent( acquisitionStop, "AcquisitionStop@i" );
 		locator.bindComponent( acquisitionAbort, "AcquisitionAbort@i" );
 		locator.bindComponent( acquisitionArm, "AcquisitionArm@i" );
 		locator.bindComponent( acquisitionFrameCount, "AcquisitionFrameCount" );
+		locator.bindComponent( acquisitionBurstFrameCount, "AcquisitionBurstFrameCount" );
 		locator.bindComponent( acquisitionFrameRate, "AcquisitionFrameRate" );
 		locator.bindComponent( acquisitionFrameRateAbs, "AcquisitionFrameRateAbs" );
 		locator.bindComponent( acquisitionFrameRateRaw, "AcquisitionFrameRateRaw" );
@@ -658,6 +691,7 @@ public:
 		locator.bindComponent( mvExposureAutoOffsetY, "mvExposureAutoOffsetY" );
 		locator.bindComponent( mvExposureAutoWidth, "mvExposureAutoWidth" );
 		locator.bindComponent( mvExposureAutoHeight, "mvExposureAutoHeight" );
+		locator.bindComponent( mvSmearReduction, "mvSmearReduction" );
 		locator.bindComponent( mvAcquisitionMemoryMode, "mvAcquisitionMemoryMode" );
 		locator.bindComponent( mvPretriggerFrameCount, "mvPretriggerFrameCount" );
 		locator.bindComponent( mvAcquisitionMemoryMaxFrameCount, "mvAcquisitionMemoryMaxFrameCount" );
@@ -676,9 +710,9 @@ public:
 	///
 	/// Stops the Acquisition of the device at the end of the current Frame. It is mainly used when AcquisitionMode is Continuous but can be used in any acquisition mode.
 	Method acquisitionStop;
-	/// \brief Aborts the acquisition immediately.
+	/// \brief Aborts the Acquisition immediately.
 	///
-	/// Aborts the acquisition immediately. This will end the capture without completing the current Frame or waiting on a trigger. If no Acquisition is in progress, the command is ignored.
+	/// Aborts the Acquisition immediately. This will end the capture without completing the current Frame or waiting on a trigger. If no Acquisition is in progress, the command is ignored.
 	Method acquisitionAbort;
 	/// \brief Arms the device before an AcquisitionStart command.
 	///
@@ -688,6 +722,10 @@ public:
 	///
 	/// Number of frames to acquire in MultiFrame Acquisition mode.
 	PropertyI64 acquisitionFrameCount;
+	/// \brief Number of frames to acquire for each FrameBurstStart trigger.
+	///
+	/// Number of frames to acquire for each FrameBurstStart trigger.
+	PropertyI64 acquisitionBurstFrameCount;
 	/// \brief Controls the acquisition rate (in Hertz) at which the frames are captured.
 	///
 	/// Controls the acquisition rate (in Hertz) at which the frames are captured.
@@ -768,9 +806,9 @@ public:
 	///
 	/// Sets the operation mode of the Exposure (or shutter).
 	PropertyI64 exposureMode;
-	/// \brief Sets the Exposure time (in microseconds) when ExposureMode is Timed.
+	/// \brief Sets the Exposure time (in microseconds) when ExposureMode is Timed and ExposureAuto is Off.
 	///
-	/// Sets the Exposure time (in microseconds) when ExposureMode is Timed. This controls the duration where the photosensitive cells are exposed to light.
+	/// Sets the Exposure time (in microseconds) when ExposureMode is Timed and ExposureAuto is Off. This controls the duration where the photosensitive cells are exposed to light.
 	PropertyF exposureTime;
 	/// \brief This feature is deprecated.
 	///
@@ -784,43 +822,79 @@ public:
 	///
 	/// Sets the automatic exposure mode when ExposureMode is Timed. The exact algorithm used to implement this control is device-specific.
 	PropertyI64 exposureAuto;
+	/// \brief Selects the shutter mode of the sensor.
+	///
+	/// Selects the shutter mode of the sensor.
 	PropertyI64 mvShutterMode;
+	/// \brief Kneepoint of 10 to 8 bit compression.
+	///
+	/// Kneepoint of 10 to 8 bit compression.
 	PropertyI64 mvCompressionKneepoint;
+	/// \brief Activates the sensor's defective pixel correction.
+	///
+	/// Activates the sensor's defective pixel correction.
 	PropertyIBoolean mvDefectivePixelEnable;
+	/// \brief The lower limit of the exposure time in auto exposure mode.
+	///
+	/// The lower limit of the exposure time in auto exposure mode.
 	PropertyF mvExposureAutoLowerLimit;
+	/// \brief The upper limit of the exposure time in auto exposure mode.
+	///
+	/// The upper limit of the exposure time in auto exposure mode.
 	PropertyF mvExposureAutoUpperLimit;
+	/// \brief Determines the increment or decrement size of exposure value from frame to frame.
+	///
+	/// Determines the increment or decrement size of exposure value from frame to frame.
 	PropertyI64 mvExposureAutoSpeed;
+	/// \brief The number of frames that the AEC must skip before updating the exposure register.
+	///
+	/// The number of frames that the AEC must skip before updating the exposure register.
 	PropertyI64 mvExposureAutoDelayImages;
+	/// \brief Common desired average grey value (in percent) used for Auto Gain Control(AGC) and Auto Exposure Control(AEC).
 	///
 	/// Common desired average grey value (in percent) used for auto gain control(AGC) and auto exposure control (AEC).
 	PropertyI64 mvExposureAutoAverageGrey;
+	/// \brief Highlight auto control AOI to check AOI settings. Switch off for normal operation.
 	///
-	/// Common highlight auto control AOI.
+	/// Highlight auto control AOI to check AOI settings. Switch off for normal operation.
 	PropertyI64 mvExposureAutoHighlightAOI;
+	/// \brief Common AutoControl AOI used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AutoControl AOI used for auto gain control(AGC), auto exposure control (AEC) and auto white balancing.
+	/// Common AutoControl AOI used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvExposureAutoAOIMode;
+	/// \brief Common AOI XOffset used for auto gain control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI XOffset used for auto gain control(AGC) and auto exposure control (AEC).
+	/// Common AOI XOffset used for auto gain control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvExposureAutoOffsetX;
+	/// \brief Common AOI YOffset used for auto gain control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI YOffset used for auto gain control(AGC) and auto exposure control (AEC).
+	/// Common AOI YOffset used for auto gain control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvExposureAutoOffsetY;
+	/// \brief Common AOI Width used for auto gain control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI Width used for auto gain control(AGC) and auto exposure control (AEC).
+	/// Common AOI Width used for auto gain control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvExposureAutoWidth;
+	/// \brief Common AOI Height used for auto gain control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI Height used for auto gain control(AGC) and auto exposure control (AEC).
+	/// Common AOI Height used for auto gain control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvExposureAutoHeight;
+	/// \brief Smear reduction in triggered and nonoverlapped mode.
+	///
+	/// Smear reduction in triggered and nonoverlapped mode.
+	PropertyI64 mvSmearReduction;
+	/// \brief mvRecord is used to store frames in memory. mvPlayback transfers stored frames. mvPretrigger stores frames in memory to be transfered after trigger.
 	///
 	/// mvRecord is used to store frames in memory. mvPlayback transfers stored frames. mvPretrigger stores frames in memory to be transfered after trigger.
 	PropertyI64 mvAcquisitionMemoryMode;
+	/// \brief Number of frames to acquire before the occurence of an AcquisitionStart or AcquisitionActive trigger.
 	///
-	/// Number of frames to acquire before an AcquisitionStart or AcquisitionActive trigger occurs.
+	/// Number of frames to acquire before the occurence of an AcquisitionStart or AcquisitionActive trigger.
 	PropertyI64 mvPretriggerFrameCount;
+	/// \brief Max number of frames to record.
 	///
 	/// Max number of frames to record.
 	PropertyI64 mvAcquisitionMemoryMaxFrameCount;
+	/// \brief AOI and/or binning parameter changed after last Acquisition.
 	///
 	/// AOI and/or binning parameter changed after last Acquisition.
 	PropertyI64 mvAcquisitionMemoryAOIParameterChanged;
@@ -832,6 +906,7 @@ public:
 	Method getAcquisitionAbort( void ) const { return acquisitionAbort; }
 	Method getAcquisitionArm( void ) const { return acquisitionArm; }
 	PropertyI64 getAcquisitionFrameCount( void ) const { return acquisitionFrameCount; }
+	PropertyI64 getAcquisitionBurstFrameCount( void ) const { return acquisitionBurstFrameCount; }
 	PropertyF getAcquisitionFrameRate( void ) const { return acquisitionFrameRate; }
 	PropertyF getAcquisitionFrameRateAbs( void ) const { return acquisitionFrameRateAbs; }
 	PropertyI64 getAcquisitionFrameRateRaw( void ) const { return acquisitionFrameRateRaw; }
@@ -870,6 +945,7 @@ public:
 	PropertyI64 getmvExposureAutoOffsetY( void ) const { return mvExposureAutoOffsetY; }
 	PropertyI64 getmvExposureAutoWidth( void ) const { return mvExposureAutoWidth; }
 	PropertyI64 getmvExposureAutoHeight( void ) const { return mvExposureAutoHeight; }
+	PropertyI64 getmvSmearReduction( void ) const { return mvSmearReduction; }
 	PropertyI64 getmvAcquisitionMemoryMode( void ) const { return mvAcquisitionMemoryMode; }
 	PropertyI64 getmvPretriggerFrameCount( void ) const { return mvPretriggerFrameCount; }
 	PropertyI64 getmvAcquisitionMemoryMaxFrameCount( void ) const { return mvAcquisitionMemoryMaxFrameCount; }
@@ -910,6 +986,8 @@ public:
 			mvLineDebounceTimeFallingEdge()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( lineSelector, "LineSelector" );
 		locator.bindComponent( lineMode, "LineMode" );
 		locator.bindComponent( lineInverter, "LineInverter" );
@@ -969,9 +1047,11 @@ public:
 	///
 	/// Sets the write mask to apply to the value specified by UserOutputValueAll before writing it in the User Output register. If the UserOutputValueAllMask feature is present, setting the user Output register using UserOutputValueAll will only change the bits that have a corresponding bit in the mask set to one.
 	PropertyI64 userOutputValueAllMask;
+	/// \brief Sets the debounce time in micro seconds for low to high transitions.
 	///
 	/// Sets the debounce time in micro seconds for low to high transitions.
 	PropertyI64 mvLineDebounceTimeRisingEdge;
+	/// \brief Sets the debounce time in micro seconds for high to low transitions.
 	///
 	/// Sets the debounce time in micro seconds for high to low transitions.
 	PropertyI64 mvLineDebounceTimeFallingEdge;
@@ -1039,6 +1119,8 @@ public:
 			timerTriggerActivation()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( counterSelector, "CounterSelector" );
 		locator.bindComponent( counterEventSource, "CounterEventSource" );
 		locator.bindComponent( counterEventActivation, "CounterEventActivation" );
@@ -1067,53 +1149,53 @@ public:
 		locator.bindComponent( timerTriggerActivation, "TimerTriggerActivation" );
 	}
 	PYTHON_ONLY(%immutable;)
-	/// \brief Selects which counter to configure.
+	/// \brief Selects which Counter to configure.
 	///
-	/// Selects which counter to configure.
+	/// Selects which Counter to configure.
 	PropertyI64 counterSelector;
-	/// \brief Select the events that will be the source to increment the counter.
+	/// \brief Select the events that will be the source to increment the Counter.
 	///
-	/// Select the events that will be the source to increment the counter.
+	/// Select the events that will be the source to increment the Counter.
 	PropertyI64 counterEventSource;
 	/// \brief Selects the Activation mode Event Source signal.
 	///
 	/// Selects the Activation mode Event Source signal.
 	PropertyI64 counterEventActivation;
-	/// \brief Selects the signals that will be the source to reset the counter.
+	/// \brief Selects the signals that will be the source to reset the Counter.
 	///
-	/// Selects the signals that will be the source to reset the counter.
+	/// Selects the signals that will be the source to reset the Counter.
 	PropertyI64 counterResetSource;
 	/// \brief Selects the Activation mode of the Counter Reset Source signal.
 	///
 	/// Selects the Activation mode of the Counter Reset Source signal.
 	PropertyI64 counterResetActivation;
-	/// \brief Does a software reset of the selected counter and starts it.
+	/// \brief Does a software reset of the selected Counter and starts it.
 	///
-	/// Does a software reset of the selected counter and starts it. The counter starts counting events immediately after the reset unless a Counter trigger is active. CounterReset can be used to reset the Counter independently from the CounterResetSource. To disable the counter temporarily, set CounterEventSource to Off.
+	/// Does a software reset of the selected Counter and starts it. The counter starts counting events immediately after the reset unless a Counter trigger is active. CounterReset can be used to reset the Counter independently from the CounterResetSource. To disable the counter temporarily, set CounterEventSource to Off.
 	Method counterReset;
-	/// \brief Reads or writes the current value of the selected counter.
+	/// \brief Reads or writes the current value of the selected Counter.
 	///
-	/// Reads or writes the current value of the selected counter.
+	/// Reads or writes the current value of the selected Counter.
 	PropertyI64 counterValue;
-	/// \brief Reads the value of the selected counter when it was reset by a trigger or by an explicit CounterReset command.
+	/// \brief Reads the value of the selected Counter when it was reset by a trigger or by an explicit CounterReset command.
 	///
-	/// Reads the value of the selected counter when it was reset by a trigger or by an explicit CounterReset command.
+	/// Reads the value of the selected Counter when it was reset by a trigger or by an explicit CounterReset command.
 	PropertyI64 counterValueAtReset;
 	/// \brief Sets the duration (or number of events) before the CounterEnd event is generated.
 	///
 	/// Sets the duration (or number of events) before the CounterEnd event is generated.
 	PropertyI64 counterDuration;
-	/// \brief Returns the current state of the counter.
+	/// \brief Returns the current state of the Counter.
 	///
-	/// Returns the current state of the counter.
+	/// Returns the current state of the Counter.
 	PropertyI64 counterStatus;
-	/// \brief Selects the source to start the counter.
+	/// \brief Selects the source to start the Counter.
 	///
-	/// Selects the source to start the counter. CounterTriggerSource can take any of the following values:
+	/// Selects the source to start the Counter. CounterTriggerSource can take any of the following values:
 	PropertyI64 counterTriggerSource;
-	/// \brief Selects the activation mode of the trigger to start the counter.
+	/// \brief Selects the activation mode of the trigger to start the Counter.
 	///
-	/// Selects the activation mode of the trigger to start the counter.
+	/// Selects the activation mode of the trigger to start the Counter.
 	PropertyI64 counterTriggerActivation;
 	/// \brief Selects which Timer to configure.
 	///
@@ -1249,6 +1331,12 @@ public:
 			eventFrameEnd(),
 			eventFrameEndTimestamp(),
 			eventFrameEndFrameID(),
+			eventFrameBurstStart(),
+			eventFrameBurstStartTimestamp(),
+			eventFrameBurstStartFrameID(),
+			eventFrameBurstEnd(),
+			eventFrameBurstEndTimestamp(),
+			eventFrameBurstEndFrameID(),
 			eventFrameTransferStart(),
 			eventFrameTransferStartTimestamp(),
 			eventFrameTransferStartFrameID(),
@@ -1327,6 +1415,8 @@ public:
 			eventErrorCode()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( eventSelector, "EventSelector" );
 		locator.bindComponent( eventNotification, "EventNotification" );
 		locator.bindComponent( eventAcquisitionTrigger, "EventAcquisitionTrigger" );
@@ -1356,6 +1446,12 @@ public:
 		locator.bindComponent( eventFrameEnd, "EventFrameEnd" );
 		locator.bindComponent( eventFrameEndTimestamp, "EventFrameEndTimestamp" );
 		locator.bindComponent( eventFrameEndFrameID, "EventFrameEndFrameID" );
+		locator.bindComponent( eventFrameBurstStart, "EventFrameBurstStart" );
+		locator.bindComponent( eventFrameBurstStartTimestamp, "EventFrameBurstStartTimestamp" );
+		locator.bindComponent( eventFrameBurstStartFrameID, "EventFrameBurstStartFrameID" );
+		locator.bindComponent( eventFrameBurstEnd, "EventFrameBurstEnd" );
+		locator.bindComponent( eventFrameBurstEndTimestamp, "EventFrameBurstEndTimestamp" );
+		locator.bindComponent( eventFrameBurstEndFrameID, "EventFrameBurstEndFrameID" );
 		locator.bindComponent( eventFrameTransferStart, "EventFrameTransferStart" );
 		locator.bindComponent( eventFrameTransferStartTimestamp, "EventFrameTransferStartTimestamp" );
 		locator.bindComponent( eventFrameTransferStartFrameID, "EventFrameTransferStartFrameID" );
@@ -1518,9 +1614,9 @@ public:
 	///
 	/// Returns the unique Identifier of the FrameTrigger type of Event. It can be used to register a callback function to be notified of the event occurrence. Its value uniquely identify the type event received.
 	PropertyI64 eventFrameTrigger;
-	/// \brief Returns the Timestamp of the AquisitionTrigger Event.
+	/// \brief Returns the Timestamp of the AcquisitionTrigger Event.
 	///
-	/// Returns the Timestamp of the AquisitionTrigger Event. It can be used to determine precisely when the event occured.
+	/// Returns the Timestamp of the AcquisitionTrigger Event. It can be used to determine precisely when the event occured.
 	PropertyI64 eventFrameTriggerTimestamp;
 	/// \brief Returns the unique Identifier of the Frame (or image) that generated the FrameTrigger Event.
 	///
@@ -1550,6 +1646,30 @@ public:
 	///
 	/// Returns the unique Identifier of the Frame (or image) that generated the Frame End Event.
 	PropertyI64 eventFrameEndFrameID;
+	/// \brief Returns the unique Identifier of the Frame Burst Start type of Event.
+	///
+	/// Returns the unique Identifier of the Frame Burst Start type of Event.
+	PropertyI64 eventFrameBurstStart;
+	/// \brief Returns the Timestamp of the Frame Burst Start Event.
+	///
+	/// Returns the Timestamp of the Frame Burst Start Event.
+	PropertyI64 eventFrameBurstStartTimestamp;
+	/// \brief Returns the unique Identifier of the Frame (or image) that generated the Frame Burst Start Event.
+	///
+	/// Returns the unique Identifier of the Frame (or image) that generated the Frame Burst Start Event.
+	PropertyI64 eventFrameBurstStartFrameID;
+	/// \brief Returns the unique Identifier of the Frame Burst End type of Event.
+	///
+	/// Returns the unique Identifier of the Frame Burst End type of Event.
+	PropertyI64 eventFrameBurstEnd;
+	/// \brief Returns the Timestamp of the Frame Burst End Event.
+	///
+	/// Returns the Timestamp of the Frame Burst End Event.
+	PropertyI64 eventFrameBurstEndTimestamp;
+	/// \brief Returns the unique Identifier of the Frame (or image) that generated the Frame Burst End Event.
+	///
+	/// Returns the unique Identifier of the Frame (or image) that generated the Frame Burst End Event.
+	PropertyI64 eventFrameBurstEndFrameID;
 	/// \brief Returns the unique Identifier of the Frame Transfer Start type of Event.
 	///
 	/// Returns the unique Identifier of the Frame Transfer Start type of Event.
@@ -1822,6 +1942,12 @@ public:
 	PropertyI64 getEventFrameEnd( void ) const { return eventFrameEnd; }
 	PropertyI64 getEventFrameEndTimestamp( void ) const { return eventFrameEndTimestamp; }
 	PropertyI64 getEventFrameEndFrameID( void ) const { return eventFrameEndFrameID; }
+	PropertyI64 getEventFrameBurstStart( void ) const { return eventFrameBurstStart; }
+	PropertyI64 getEventFrameBurstStartTimestamp( void ) const { return eventFrameBurstStartTimestamp; }
+	PropertyI64 getEventFrameBurstStartFrameID( void ) const { return eventFrameBurstStartFrameID; }
+	PropertyI64 getEventFrameBurstEnd( void ) const { return eventFrameBurstEnd; }
+	PropertyI64 getEventFrameBurstEndTimestamp( void ) const { return eventFrameBurstEndTimestamp; }
+	PropertyI64 getEventFrameBurstEndFrameID( void ) const { return eventFrameBurstEndFrameID; }
 	PropertyI64 getEventFrameTransferStart( void ) const { return eventFrameTransferStart; }
 	PropertyI64 getEventFrameTransferStartTimestamp( void ) const { return eventFrameTransferStartTimestamp; }
 	PropertyI64 getEventFrameTransferStartFrameID( void ) const { return eventFrameTransferStartFrameID; }
@@ -1962,6 +2088,8 @@ public:
 			mvLowLight()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( gainSelector, "GainSelector" );
 		locator.bindComponent( gain, "Gain" );
 		locator.bindComponent( gainRaw, "GainRaw" );
@@ -2089,55 +2217,85 @@ public:
 	///
 	/// Controls the gamma correction of pixel intensity. This is typically used to compensate for non-linearity of the display system (such as CRT).
 	PropertyF gamma;
+	/// \brief The number of frames that the AEC must skip before updating the exposure register
+	///
+	/// The number of frames that the AEC must skip before updating the exposure register
 	PropertyI64 mvGainAutoDelayImages;
+	/// \brief The upper limit of the gain in auto gain mode
+	///
+	/// The upper limit of the gain in auto gain mode
 	PropertyF mvGainAutoUpperLimit;
+	/// \brief The lower limit of the gain in auto gain mode
+	///
+	/// The lower limit of the gain in auto gain mode
 	PropertyF mvGainAutoLowerLimit;
+	/// \brief Determines the increment or decrement size of gain value from frame to frame.
+	///
+	/// Determines the increment or decrement size of gain value from frame to frame.
 	PropertyI64 mvGainAutoSpeed;
+	/// \brief Common desired average grey value (in percent) used for Auto Gain Control(AGC) and Auto Exposure Control(AEC).
 	///
-	/// Common desired average grey value (in percent) used for auto gain control(AGC) and auto exposure control (AEC).
+	/// Common desired average grey value (in percent) used for Auto Gain Control(AGC) and Auto Exposure Control(AEC).
 	PropertyI64 mvGainAutoAverageGrey;
+	/// \brief Highlight auto control AOI to check AOI settings. Switch off for normal operation.
 	///
-	/// Common highlight auto control AOI.
+	/// Highlight auto control AOI to check AOI settings. Switch off for normal operation.
 	PropertyI64 mvGainAutoHighlightAOI;
+	/// \brief Common AutoControl AOI used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balancing.
 	///
-	/// Common AutoControl AOI used for auto gain control(AGC), auto exposure control (AEC) and auto white balancing.
+	/// Common AutoControl AOI used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balancing.
 	PropertyI64 mvGainAutoAOIMode;
+	/// \brief Common AOI X-Offset used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI XOffset used for auto gain control(AGC) and auto Gain control (AEC).
+	/// Common AOI X-Offset used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvGainAutoOffsetX;
+	/// \brief Common AOI Y-Offset used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI YOffset used for auto gain control(AGC) and auto Gain control (AEC).
+	/// Common AOI Y-Offset used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvGainAutoOffsetY;
+	/// \brief Common AOI Width used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI Width used for auto gain control(AGC) and auto Gain control (AEC).
+	/// Common AOI Width used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvGainAutoWidth;
+	/// \brief Common AOI Height used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI Height used for auto gain control(AGC) and auto Gain control (AEC).
+	/// Common AOI Height used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvGainAutoHeight;
+	/// \brief Common AutoControl AOI used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AutoControl AOI used for auto gain control(AGC), auto exposure control (AEC) and auto white balancing.
+	/// Common AutoControl AOI used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvBalanceWhiteAutoAOIMode;
+	/// \brief Common AOI X-Offset used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI XOffset used for auto gain control(AGC) and auto Gain control (AEC).
+	/// Common AOI XOffset used for auto gain control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvBalanceWhiteAutoOffsetX;
+	/// \brief Common AOI Y-Offset used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI YOffset used for auto gain control(AGC) and auto Gain control (AEC).
+	/// Common AOI Y-Offset used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvBalanceWhiteAutoOffsetY;
+	/// \brief Common AOI Width used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI Width used for auto gain control(AGC) and auto Gain control (AEC).
+	/// Common AOI Width used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvBalanceWhiteAutoWidth;
+	/// \brief Common AOI Height used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	///
-	/// Common AOI Height used for auto gain control(AGC) and auto Gain control (AEC).
+	/// Common AOI Height used for Auto Gain Control(AGC), Auto Exposure Control(AEC) and Auto White Balance(AWB).
 	PropertyI64 mvBalanceWhiteAutoHeight;
+	/// \brief Sets the voltage in millivolt.
 	///
 	/// Sets the voltage in millivolt.
 	PropertyI64 mvVCAL;
+	/// \brief Sets the voltage in millivolt.
 	///
 	/// Sets the voltage in millivolt.
 	PropertyI64 mvVBLACK;
+	/// \brief Sets the voltage in millivolt.
 	///
 	/// Sets the voltage in millivolt.
 	PropertyI64 mvVOFFSET;
+	/// \brief Makes the image brighter.
+	///
+	/// Makes the image brighter.
 	PropertyI64 mvLowLight;
 	PYTHON_ONLY(%mutable;)
 #ifdef DOTNET_ONLY_CODE
@@ -2210,6 +2368,8 @@ public:
 			LUTValueAll()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( LUTSelector, "LUTSelector" );
 		locator.bindComponent( LUTEnable, "LUTEnable" );
 		locator.bindComponent( LUTIndex, "LUTIndex" );
@@ -2248,43 +2408,9 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-/// \brief Provides the Root of the GenICam features tree.
+/// \brief Category that contains the transport Layer control features.
 ///
-/// Provides the Root of the GenICam features tree.
-class Root : public mvIMPACT::acquire::ComponentCollection
-//-----------------------------------------------------------------------------
-{
-public:
-	/// \brief Constructs a new <b>mvIMPACT::acquire::GenICam::Root</b> object.
-	explicit Root(
-		/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
-		mvIMPACT::acquire::Device* pDev,
-		/// The name of the driver internal setting to access with this instance.
-		/// A list of valid setting names can be obtained by a call to
-		/// <b>mvIMPACT::acquire::FunctionInterface::getAvailableSettings</b>, new
-		/// settings can be created with the function
-		/// <b>mvIMPACT::acquire::FunctionInterface::createSetting</b>
-		const std::string& settingName = "Base" ) : mvIMPACT::acquire::ComponentCollection(pDev),
-			TLParamsLocked()
-	{
-		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
-		locator.bindComponent( TLParamsLocked, "TLParamsLocked" );
-	}
-	PYTHON_ONLY(%immutable;)
-	/// \brief Used by the Transport Layer to prevent critical features changes during acquisition.
-	///
-	/// Used by the Transport Layer to prevent critical features changes during acquisition.
-	PropertyI64 TLParamsLocked;
-	PYTHON_ONLY(%mutable;)
-#ifdef DOTNET_ONLY_CODE
-	PropertyI64 getTLParamsLocked( void ) const { return TLParamsLocked; }
-#endif // #ifdef DOTNET_ONLY_CODE
-};
-
-//-----------------------------------------------------------------------------
-/// \brief Category that contains the Transport layer control features.
-///
-/// Category that contains the Transport layer control features.
+/// Category that contains the transport Layer control features.
 class TransportLayerControl : public mvIMPACT::acquire::ComponentCollection
 //-----------------------------------------------------------------------------
 {
@@ -2383,6 +2509,8 @@ public:
 			mvGevSCBW()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( payloadSize, "PayloadSize" );
 		locator.bindComponent( gevVersionMajor, "GevVersionMajor" );
 		locator.bindComponent( gevVersionMinor, "GevVersionMinor" );
@@ -2745,35 +2873,35 @@ public:
 	PropertyI64 gevSCSP;
 	/// \brief This feature is deprecated.
 	///
-	/// This feature is deprecated. See section 2.1 Device Control for an equivalent. Selects the manifest entry to reference.
+	/// This feature is deprecated. See the Device Control section for an equivalent. Selects the manifest entry to reference.
 	PropertyI64 gevManifestEntrySelector;
 	/// \brief This feature is deprecated.
 	///
-	/// This feature is deprecated. See section 2.1 Device Control for an equivalent.. Indicates the major version number of the XML file of the selected manifest entry.
+	/// This feature is deprecated. See the Device Control section for an equivalent. Indicates the major version number of the XML file of the selected manifest entry.
 	PropertyI64 gevManifestXMLMajorVersion;
 	/// \brief This feature is deprecated.
 	///
-	/// This feature is deprecated. See section 2.1 Device Control for an equivalent.. Indicates the minor version number of the XML file of the selected manifest entry.
+	/// This feature is deprecated. See the Device Control section for an equivalent. Indicates the minor version number of the XML file of the selected manifest entry.
 	PropertyI64 gevManifestXMLMinorVersion;
 	/// \brief This feature is deprecated.
 	///
-	/// This feature is deprecated. See section 2.1 Device Control for an equivalent.. Indicates the subminor version number of the XML file of the selected manifest entry.
+	/// This feature is deprecated. See the Device Control section for an equivalent. Indicates the subminor version number of the XML file of the selected manifest entry.
 	PropertyI64 gevManifestXMLSubMinorVersion;
 	/// \brief This feature is deprecated.
 	///
-	/// This feature is deprecated. See section 2.1 Device Control for an equivalent.. Indicates the major version number of the schema file of the selected manifest entry.
+	/// This feature is deprecated. See the Device Control section for an equivalent. Indicates the major version number of the schema file of the selected manifest entry.
 	PropertyI64 gevManifestSchemaMajorVersion;
 	/// \brief This feature is deprecated.
 	///
-	/// This feature is deprecated. See section 2.1 Device Control for an equivalent.. Indicates the minor version number of the schema file of the selected manifest entry.
+	/// This feature is deprecated. See the Device Control section for an equivalent.. Indicates the minor version number of the schema file of the selected manifest entry.
 	PropertyI64 gevManifestSchemaMinorVersion;
 	/// \brief This feature is deprecated.
 	///
-	/// This feature is deprecated. See section 2.1 Device Control for an equivalent.. Indicates the first URL to the XML device description file of the selected manifest entry.
+	/// This feature is deprecated. See the Device Control section for an equivalent. Indicates the first URL to the XML device description file of the selected manifest entry.
 	PropertyS gevManifestPrimaryURL;
 	/// \brief This feature is deprecated.
 	///
-	/// This feature is deprecated. See section 2.1 Device Control for an equivalent.. Indicates the second URL to the XML device description file of the selected manifest entry.
+	/// This feature is deprecated. See the Device Control section for an equivalent. Indicates the second URL to the XML device description file of the selected manifest entry.
 	PropertyS gevManifestSecondaryURL;
 	/// \brief This Camera Link specific feature describes the configuration used by the camera.
 	///
@@ -2783,9 +2911,9 @@ public:
 	///
 	/// This Camera Link specific feature describes the time multiplexing of the camera link connection to transfer more than the configuration allows, in one single clock.
 	PropertyI64 clTimeSlotsCount;
-	/// \brief This Camera Link specific device tap geometry feature describes the geometrical properties characterizing the taps of a Camera Link camera as seen from the frame grabber or acquisition card.
+	/// \brief This device tap geometry feature describes the geometrical properties characterizing the taps of a camera as seen from the frame grabber or acquisition card.
 	///
-	/// This Camera Link specific device tap geometry feature describes the geometrical properties characterizing the taps of a Camera Link camera as seen from the frame grabber or acquisition card. Note the case of RGB where even though there are 3 color components, they are considered to be one tap (for instance, Camera Link specification defines 24-bit RGB as a single tap of 24 bits). This feature is mainly applicable to Camera link cameras.
+	/// This device tap geometry feature describes the geometrical properties characterizing the taps of a camera as seen from the frame grabber or acquisition card. Note the case of RGB where even though there are 3 color components, they are considered to be one tap. This feature is mainly applicable to Camera link cameras.
 	PropertyI64 deviceTapGeometry;
 	/// \brief Selects the bandwidth control for the selected stream channel.
 	///
@@ -2793,7 +2921,7 @@ public:
 	PropertyI64 mvGevSCBWControl;
 	/// \brief Sets the stream channels max. bandwidth in KBps
 	///
-	/// This value sets the stream channels max. bandwidth in KMps.
+	/// This value sets the stream channels max. bandwidth in KBps.
 	PropertyI64 mvGevSCBW;
 	PYTHON_ONLY(%mutable;)
 #ifdef DOTNET_ONLY_CODE
@@ -2907,6 +3035,8 @@ public:
 			mvUserData()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( userSetSelector, "UserSetSelector" );
 		locator.bindComponent( userSetLoad, "UserSetLoad@i" );
 		locator.bindComponent( userSetSave, "UserSetSave@i" );
@@ -2930,6 +3060,7 @@ public:
 	///
 	/// Selects the feature User Set to load and make active when the device is reset.
 	PropertyI64 userSetDefaultSelector;
+	/// \brief A register to store arbitrary user data into the devices non-volatile memory.
 	///
 	/// A register to store arbitrary user data into the devices non-volatile memory
 	PropertyS mvUserData;
@@ -2991,6 +3122,8 @@ public:
 			chunkFrameID()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( chunkModeActive, "ChunkModeActive" );
 		locator.bindComponent( chunkSelector, "ChunkSelector" );
 		locator.bindComponent( chunkEnable, "ChunkEnable" );
@@ -3196,6 +3329,8 @@ public:
 			fileSize()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( fileSelector, "FileSelector" );
 		locator.bindComponent( fileOperationSelector, "FileOperationSelector" );
 		locator.bindComponent( fileOperationExecute, "FileOperationExecute@i" );
@@ -3287,6 +3422,8 @@ public:
 			colorTransformationValue()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( colorTransformationSelector, "ColorTransformationSelector" );
 		locator.bindComponent( colorTransformationEnable, "ColorTransformationEnable" );
 		locator.bindComponent( colorTransformationValueSelector, "ColorTransformationValueSelector" );
@@ -3342,6 +3479,8 @@ public:
 			actionGroupKey()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( actionDeviceKey, "ActionDeviceKey" );
 		locator.bindComponent( actionSelector, "ActionSelector" );
 		locator.bindComponent( actionGroupMask, "ActionGroupMask" );
@@ -3398,6 +3537,8 @@ public:
 			mvLogicGateORSource4()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( mvLogicGateANDSelector, "mvLogicGateANDSelector" );
 		locator.bindComponent( mvLogicGateANDSource1, "mvLogicGateANDSource1" );
 		locator.bindComponent( mvLogicGateANDSource2, "mvLogicGateANDSource2" );
@@ -3408,13 +3549,37 @@ public:
 		locator.bindComponent( mvLogicGateORSource4, "mvLogicGateORSource4" );
 	}
 	PYTHON_ONLY(%immutable;)
+	/// \brief Selects the AND gate to configure.
+	///
+	/// This enumeration selects the AND gate to configure.
 	PropertyI64 mvLogicGateANDSelector;
+	/// \brief Selects the first input signal of the AND gate selected by mvLogicGateANDSelector.
+	///
+	/// This enumeration can be used to select the first input signal of the AND gate selected by mvLogicGateANDSelector.
 	PropertyI64 mvLogicGateANDSource1;
+	/// \brief Selects the second input signal of the AND gate selected by mvLogicGateANDSelector.
+	///
+	/// This enumeration can be used to select the second input signal of the AND gate selected by mvLogicGateANDSelector.
 	PropertyI64 mvLogicGateANDSource2;
+	/// \brief Selects the OR gate to configure.
+	///
+	/// This enumeration selects the OR gate to configure.
 	PropertyI64 mvLogicGateORSelector;
+	/// \brief Selects the first input signal of the OR gate selected by mvLogicGateORSelector.
+	///
+	/// This enumeration can be used to select the first input signal of the OR gate selected by mvLogicGateORSelector.
 	PropertyI64 mvLogicGateORSource1;
+	/// \brief Selects the second input signal of the OR gate selected by mvLogicGateORSelector.
+	///
+	/// This enumeration can be used to select the second input signal of the OR gate selected by mvLogicGateORSelector.
 	PropertyI64 mvLogicGateORSource2;
+	/// \brief Selects the third input signal of the OR gate selected by mvLogicGateORSelector.
+	///
+	/// This enumeration can be used to select the third input signal of the OR gate selected by mvLogicGateORSelector.
 	PropertyI64 mvLogicGateORSource3;
+	/// \brief Selects the fourth input signal of the OR gate selected by mvLogicGateORSelector.
+	///
+	/// This enumeration can be used to select the fourth input signal of the OR gate selected by mvLogicGateORSelector.
 	PropertyI64 mvLogicGateORSource4;
 	PYTHON_ONLY(%mutable;)
 #ifdef DOTNET_ONLY_CODE
@@ -3448,6 +3613,8 @@ public:
 			mvCurrent()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( mvCurrentSelector, "mvCurrentSelector" );
 		locator.bindComponent( mvCurrent, "mvCurrent" );
 	}
@@ -3462,6 +3629,7 @@ public:
 };
 
 //-----------------------------------------------------------------------------
+/// \brief Contains features to control the devices Flat Field Correction parameters.
 ///
 /// Contains features to control the devices Flat Field Correction parameters.
 class mvFFCControl : public mvIMPACT::acquire::ComponentCollection
@@ -3483,17 +3651,22 @@ public:
 			mvFFCCalibrate()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( mvFFCEnable, "mvFFCEnable" );
 		locator.bindComponent( mvFFCCalibrationImageCount, "mvFFCCalibrationImageCount" );
 		locator.bindComponent( mvFFCCalibrate, "mvFFCCalibrate@i" );
 	}
 	PYTHON_ONLY(%immutable;)
+	/// \brief Enables the Flat Field Correction.
 	///
-	/// Activates the Flat Field Correction.
+	/// Enables the Flat Field Correction.
 	PropertyIBoolean mvFFCEnable;
+	/// \brief The number of images to use for the calculation of the correction image.
 	///
 	/// The number of images to use for the calculation of the correction image.
 	PropertyI64 mvFFCCalibrationImageCount;
+	/// \brief Starts the Calibration of the Flat Field Correction.
 	///
 	/// Starts the Calibration of the Flat Field Correction.
 	Method mvFFCCalibrate;
@@ -3506,8 +3679,9 @@ public:
 };
 
 //-----------------------------------------------------------------------------
+/// \brief Contains features to control the frame averaging engine.
 ///
-/// Contains features to control frame average feature
+/// Contains features to control the frame averaging engine.
 class mvFrameAverageControl : public mvIMPACT::acquire::ComponentCollection
 //-----------------------------------------------------------------------------
 {
@@ -3526,15 +3700,19 @@ public:
 			mvFrameAverageSlope()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( mvFrameAverageEnable, "mvFrameAverageEnable" );
 		locator.bindComponent( mvFrameAverageSlope, "mvFrameAverageSlope" );
 	}
 	PYTHON_ONLY(%immutable;)
+	/// \brief Enables the frame averaging engine.
 	///
-	/// Activates the frame average feature.
+	/// Enables the frame averaging engine.
 	PropertyIBoolean mvFrameAverageEnable;
+	/// \brief The slope in full range of register.
 	///
-	/// The slope in full range of register
+	/// The slope in full range of register.
 	PropertyI64 mvFrameAverageSlope;
 	PYTHON_ONLY(%mutable;)
 #ifdef DOTNET_ONLY_CODE
@@ -3544,8 +3722,9 @@ public:
 };
 
 //-----------------------------------------------------------------------------
+/// \brief Contains features to control the devices High Dynamic Range parameters.
 ///
-/// Contains features to control the devices High Danamic Range parameters.
+/// Contains features to control the devices High Dynamic Range parameters.
 class mvHDRControl : public mvIMPACT::acquire::ComponentCollection
 //-----------------------------------------------------------------------------
 {
@@ -3569,6 +3748,8 @@ public:
 			mvHDRExposure2()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenICam" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( mvHDREnable, "mvHDREnable" );
 		locator.bindComponent( mvHDRPreset, "mvHDRPreset" );
 		locator.bindComponent( mvHDRSelector, "mvHDRSelector" );
@@ -3578,10 +3759,17 @@ public:
 		locator.bindComponent( mvHDRExposure2, "mvHDRExposure2" );
 	}
 	PYTHON_ONLY(%immutable;)
+	/// \brief Enables the High Dynamic Range Feature.
+	///
+	/// Enables the High Dynamic Range Feature.
 	PropertyIBoolean mvHDREnable;
+	/// \brief Selects the HDR parameter set.
 	///
 	/// Selects the HDR parameter set.
 	PropertyI64 mvHDRPreset;
+	/// \brief Selects the HDR parameter set to configure.
+	///
+	/// This enumeration selects the HDR parameter set to configure.
 	PropertyI64 mvHDRSelector;
 	/// \brief First HDR Voltage in mV.
 	///
@@ -3642,6 +3830,8 @@ public:
 			streamID()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenTL" );
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( deviceID, "DeviceID" );
 		locator.bindComponent( deviceVendorName, "DeviceVendorName" );
 		locator.bindComponent( deviceModelName, "DeviceModelName" );
@@ -3753,9 +3943,11 @@ public:
 			mvResendFeaturesLocked()
 	{
 		mvIMPACT::acquire::DeviceComponentLocator locator(pDev, mvIMPACT::acquire::dltSetting, settingName);
+		locator.bindSearchBase( locator.searchbase_id(), "Camera/GenTL" );
 		std::ostringstream oss;
 		oss << "Stream" << index;
 		locator = mvIMPACT::acquire::DeviceComponentLocator(locator.findComponent( oss.str() ));
+		m_hRoot = locator.searchbase_id();
 		locator.bindComponent( streamID, "StreamID" );
 		locator.bindComponent( streamAnnouncedBufferCount, "StreamAnnouncedBufferCount" );
 		locator.bindComponent( streamAcquisitionModeSelector, "StreamAcquisitionModeSelector" );

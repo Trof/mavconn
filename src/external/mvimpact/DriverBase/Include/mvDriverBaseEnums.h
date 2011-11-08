@@ -502,7 +502,7 @@ enum TCameraAoiMode
 /// where almost no colour information will be contained in the image anyway thus
 /// resulting in useful images again). Therefore this feature has deliberately
 /// left available. \n \n
-/// \image html Binning_modes.png \n
+/// \image html Binning_modes.png
 enum TCameraBinningMode
 //-----------------------------------------------------------------------------
 {
@@ -1194,7 +1194,7 @@ enum TChannelSplitMode
 #ifndef IGNORE_MVGRABBER_SPECIFIC_DOCUMENTATION
 	//-----------------------------------------------------------------------------
 	/// \brief Clamp signal means, that a AC coupled video signal is clamped on the porch
-	/// to get a signal transfer with less noise and independent from the d.c. voltage portion.
+	///	to get a signal transfer with less noise and independent from the d.c. voltage portion.
 	/// The clamp pulse width is always 0.5 micro sec.
 	enum TClampMode
 	//-----------------------------------------------------------------------------
@@ -1428,7 +1428,7 @@ enum TDeviceEventType
 	/// manager has been connected to the system(<b>deprecated</b>).
 	///
 	/// \note
-	/// This event has been declarded deprecated. An application should register a callback
+	/// This event has been declared deprecated. An application should register a callback
 	/// to the state property instead.
 	detPnPArrival = 0x1,
 	/// \brief An event of this type will be signalled (<b>if desired</b>) each time a
@@ -1436,7 +1436,7 @@ enum TDeviceEventType
 	/// manager has been disconnected to the system(<b>deprecated</b>).
 	///
 	/// \note
-	/// This event has been declarded deprecated. An application should register a callback
+	/// This event has been declared deprecated. An application should register a callback
 	/// to the state property instead.
 	detPnPRemoval = 0x2,
 	/// \brief An event of this type will be signalled (<b>if desired</b>) each time the
@@ -1739,6 +1739,39 @@ enum TDigIOState
 	/// \brief Digital Output is kept in unchanged state.
 	digioKeep = 3
 };
+
+#ifndef IGNORE_MVBLUEFOX_SPECIFIC_DOCUMENTATION
+	//-----------------------------------------------------------------------------
+	/// \brief Defines valid IO Measurement Modes.
+	///
+	/// The shorter the gate time the faster results will be available. However a
+	/// shorter gate time will also result in a less accurate measurement.
+	enum TDigitalIOMeasurementMode
+	//-----------------------------------------------------------------------------
+	{
+		/// \brief Measure frequency with a 10 ms gate time.
+		diommFrequency_Hz_10ms = 0,
+		/// \brief Measure frequency with a 100 ms gate time.
+		diommFrequency_Hz_100ms
+	};
+
+	//-----------------------------------------------------------------------------
+	/// \brief Defines valid IO Measurement Sources.
+	///
+	/// This will define where the actual measurement will take place.
+	enum TDigitalIOMeasurementSource
+	//-----------------------------------------------------------------------------
+	{
+		/// \brief Measurement will be done on digital input 0.
+		diomsInput0 = 0,
+		/// \brief Measurement will be done on digital input 1.
+		diomsInput1 = 1,
+		/// \brief Measurement will be done on digital input 2.
+		diomsInput2 = 2,
+		/// \brief Measurement will be done on digital input 3.
+		diomsInput3 = 3
+	};
+#endif // #ifndef IGNORE_MVBLUEFOX_SPECIFIC_DOCUMENTATION
 
 #ifndef IGNORE_MVGRABBER_SPECIFIC_DOCUMENTATION
 	//-----------------------------------------------------------------------------
@@ -2138,6 +2171,38 @@ enum THWUpdateResult
 };
 
 //-----------------------------------------------------------------------------
+/// \brief Valid I2C operation modes.
+enum TI2COperationMode
+//-----------------------------------------------------------------------------
+{
+	/// \brief Selects I2C read access.
+	I2ComRead = 0,
+	/// \brief Selects I2C write access.
+	I2ComWrite
+};
+
+//-----------------------------------------------------------------------------
+/// \brief Valid I2C operation status values.
+enum TI2COperationStatus
+//-----------------------------------------------------------------------------
+{
+	/// \brief The last I2C operation was successful.
+	I2CosSuccess = 0,
+	/// \brief The last I2C operation did fail. The log-file might contain additional information
+	I2CosFailure,
+	/// \brief During the execution of the last I2C operation an invalid device address was specified.
+	I2CosInvalidDeviceAddress,
+	/// \brief During the execution of the last I2C operation an invalid device sub-address was specified.
+	///
+	/// This can either be caused by an invalid address or by an invalid address width.
+	I2CosInvalidDeviceSubAddress,
+	/// \brief During the execution of the last I2C operation too much data was either requested or sent.
+	I2CosTooMuchData,
+	/// \brief During the execution of the last I2C operation the amount of data requested or sent was too small.
+	I2CosNotEnoughData
+};
+
+//-----------------------------------------------------------------------------
 /// \brief Valid image buffer pixel formats.
 enum TImageBufferPixelFormat
 //-----------------------------------------------------------------------------
@@ -2208,10 +2273,16 @@ enum TImageBufferPixelFormat
 	/// point to R(1) when using a byte pointer.
 	ibpfRGBx888Planar = 5,
 	/// \brief A single channel 10 bit per pixel format.
+	///
+	/// Each pixel in this format consumes 2 bytes of memory. The lower 10 bit of this 2 bytes will contain valid data.
 	ibpfMono10 = 6,
 	/// \brief A single channel 12 bit per pixel format.
+	///
+	/// Each pixel in this format consumes 2 bytes of memory. The lower 12 bit of this 2 bytes will contain valid data.
 	ibpfMono12 = 7,
 	/// \brief A single channel 14 bit per pixel format.
+	///
+	/// Each pixel in this format consumes 2 bytes of memory. The lower 14 bit of this 2 bytes will contain valid data.
 	ibpfMono14 = 8,
 	/// \brief The image will be transferred as an RGB image with 24 bit per pixel.
 	///
@@ -2661,10 +2732,16 @@ enum TImageDestinationPixelFormat
 	/// point to R(1) when using a byte pointer.
 	idpfRGBx888Planar = 5,
 	/// \brief The image will be transferred as a mono channel 10 bit per pixel image.
+	///
+	/// Each pixel in this format consumes 2 bytes of memory. The lower 10 bit of this 2 bytes will contain valid data.
 	idpfMono10 = 6,
 	/// \brief The image will be transferred as a mono channel 12 bit per pixel image.
+	///
+	/// Each pixel in this format consumes 2 bytes of memory. The lower 12 bit of this 2 bytes will contain valid data.
 	idpfMono12 = 7,
 	/// \brief The image will be transferred as a mono channel 14 bit per pixel image.
+	///
+	/// Each pixel in this format consumes 2 bytes of memory. The lower 14 bit of this 2 bytes will contain valid data.
 	idpfMono14 = 8,
 	/// \brief The image will be transferred as a mono channel 16 bit per pixel image.
 	idpfMono16 = 9,
@@ -3550,13 +3627,13 @@ enum TRTProgOpCodes
 	rtctrlProgWaitClocks,
 	/// \brief Jump to location.
 	rtctrlProgJumpLoc,
-	/// \brief Set internal trigger signal to sensor controller.
+	/// \brief Set internal trigger signal of the sensor controller.
 	rtctrlProgTriggerSet,
-	/// \brief Reset internal trigger signal to sensor controller.
+	/// \brief Reset internal trigger signal of the sensor controller.
 	rtctrlProgTriggerReset,
-	/// \brief Set internal expose signal to sensor controller.
+	/// \brief Set internal expose signal of the sensor controller.
 	rtctrlProgExposeSet,
-	/// \brief Reset internal expose signal to sensor controller.
+	/// \brief Reset internal expose signal of the sensor controller.
 	rtctrlProgExposeReset,
 	/// \brief Reset internal sensor frame counter.
 	rtctrlProgFrameNrReset,
@@ -3937,12 +4014,16 @@ enum TWhiteBalanceParameter
 	typedef enum TDeviceTriggerMode TDeviceTriggerMode;
 	typedef enum TDeviceTriggerOverlap TDeviceTriggerOverlap;
 	typedef enum TDigIOState TDigIOState;
+	typedef enum TDigitalIOMeasurementMode TDigitalIOMeasurementMode;
+	typedef enum TDigitalIOMeasurementSource TDigitalIOMeasurementSource;
 	typedef enum TDigitalOutputControlMode TDigitalOutputControlMode;
 	typedef enum TDigitalSignal TDigitalSignal;
 	typedef enum TDMR_ERROR TDMR_ERROR;
 	typedef enum TFieldGateMode TFieldGateMode;
 	typedef enum TFlatFieldFilterMode TFlatFieldFilterMode;
 	typedef enum THWUpdateResult THWUpdateResult;
+	typedef enum TI2COperationMode TI2COperationMode;
+	typedef enum TI2COperationStatus TI2COperationStatus;
 	typedef enum TImageBufferPixelFormat TImageBufferPixelFormat;
 	typedef enum TImageDestinationPixelFormat TImageDestinationPixelFormat;
 	typedef enum TImageProcessingFilter TImageProcessingFilter;

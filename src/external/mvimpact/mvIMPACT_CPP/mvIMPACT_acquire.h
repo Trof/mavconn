@@ -47,24 +47,37 @@
 #	endif // compiler check
 #endif // #if !defined(MVIMPACT_DEPRECATED_CPP) && !defined(DOXYGEN_SHOULD_SKIP_THIS)
 
-#ifdef _MSC_VER // is Microsoft compiler?
-#	pragma warning( push )
-#	if _MSC_VER < 1300 // is 'old' VC 6 compiler?
-#		pragma warning( disable : 4786 ) // 'identifier was truncated to '255' characters in the debug information'
-#		define __FUNCTION__ "No function name information as the __FUNCTION__ macro is not supported by this(VC 6) compiler"
-#		pragma message( "WARNING: This header(" __FILE__ ") uses the __FUNCTION__ macro, which is not supported by this compiler. A default definition(\"" __FUNCTION__ "\") will be used!" )
-#		pragma message( "WARNING: This header(" __FILE__ ") uses inheritance for exception classes. However this compiler can't handle this correctly. Trying to catch a specific exception by writing a catch block for a base class will not work!" )
-#	endif // #if _MSC_VER < 1300
-#	if _MSC_VER >= 1400 // is at least VC 2005 compiler?
-#		include <assert.h>
-#	endif // #if _MSC_VER >= 1400
-#	pragma warning( disable : 4512 ) // 'assignment operator could not be generated' (reason: assignment operators declared 'private' but not implemented)
-#endif // #ifdef _MSC_VER
+#if !defined(DOXYGEN_SHOULD_SKIP_THIS)
+#	ifdef _MSC_VER // is Microsoft compiler?
+#		pragma warning( push )
+#		if _MSC_VER < 1300 // is 'old' VC 6 compiler?
+#			pragma warning( disable : 4786 ) // 'identifier was truncated to '255' characters in the debug information'
+#			define MVIA_FUNCTION "No function name information as the __FUNCTION__ macro is not supported by this(VC 6) compiler"
+#			pragma message( "WARNING: This header(" __FILE__ ") uses the __FUNCTION__ macro, which is not supported by this compiler. A default definition(\"" MVIA_FUNCTION "\") will be used!" )
+#			pragma message( "WARNING: This header(" __FILE__ ") uses inheritance for exception classes. However this compiler can't handle this correctly. Trying to catch a specific exception by writing a catch block for a base class will not work!" )
+#		else
+#			define MVIA_FUNCTION __FUNCTION__
+#		endif // #if _MSC_VER < 1300
+#		pragma warning( disable : 4512 ) // 'assignment operator could not be generated' (reason: assignment operators declared 'private' but not implemented)
+#	elif defined(__BORLANDC__) // is Borland compiler?
+#		pragma option push -b // force enums to the size of integer
+#		define MVIA_FUNCTION __FUNC__
+#	else
+#		define MVIA_FUNCTION __FUNCTION__
+#	endif // #ifdef _MSC_VER
+#endif // DOXYGEN_SHOULD_SKIP_THIS && WRAP_ANY
 
 #ifndef WRAP_ANY
-	// standard includes
+#	ifdef _MSC_VER // is Microsoft compiler?
+#		if _MSC_VER >= 1400 // is at least VC 2005 compiler?
+#			include <assert.h>
+#		endif // #if _MSC_VER >= 1400
+#	endif // #ifdef _MSC_VER
 #	include <limits.h>
 #	include <map>
+#	ifdef __BORLANDC__ // is Borland compiler?
+#		include <mem.h> // Borland has own ideas about where 'memset' should be defined...
+#	endif // #ifdef __BORLANDC__
 #	include <set>
 #	include <sstream>
 #	include <stdexcept>
@@ -73,16 +86,6 @@
 #	include <string.h>
 #	include <vector>
 #endif // #ifdef WRAP_ANY
-
-#if !defined(DOXYGEN_SHOULD_SKIP_THIS) && !defined(WRAP_ANY)
-#	ifdef _WIN32
-#		if defined(__BORLANDC__)
-#			include <mem.h> // Borland has own ideas about where 'memset' should be defined...
-#			pragma option push -b // force enums to the size of integer
-#			define __FUNCTION__ "No function name information as the __FUNCTION__ macro is not supported by this(Borland) compiler"
-#		endif
-#	endif // _WIN32
-#endif // DOXYGEN_SHOULD_SKIP_THIS && WRAP_ANY
 
 #ifndef WRAP_ANY
 #	ifdef MVIMPACT_H_
@@ -765,7 +768,7 @@ protected:
 		delete [] pStr;
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return resultString;
 	}
@@ -775,7 +778,7 @@ protected:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_CheckHandle( m_hObj, hcmOwnerList ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, hObj );
 		}
 	}
 	/// \brief Constructs a new unbound <b>mvIMPACT::acquire::ComponentAccess</b> object.
@@ -856,7 +859,7 @@ public:
 		unsigned int changedCounter;
 		if( ( result = OBJ_GetChangedCounter( m_hObj, &changedCounter ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return changedCounter;
 	}
@@ -881,7 +884,7 @@ public:
 		unsigned int changedCounter;
 		if( ( result = OBJ_GetChangedCounterAttr( m_hObj, &changedCounter ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return changedCounter;
 	}
@@ -915,7 +918,7 @@ private:
 		size_t featureCount = 0;
 		if( ( result = pFnQuery( m_hObj, 0, 0, &featureCount ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return featureCount;
 	}
@@ -932,7 +935,7 @@ private:
 			buf.resize( featureCount );
 			if( ( result = pFnQuery( m_hObj, 0, &(*(buf.begin())), &featureCount ) ) != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 			v.resize( featureCount );
 			for( size_t i=0; i<featureCount; i++ )
@@ -951,7 +954,7 @@ private:
 		size_t featureCount = 1;
 		if( ( result = pFnQuery( m_hObj, index, &hObj, &featureCount ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return hObj;
 	}
@@ -971,7 +974,7 @@ public:
 		TComponentFlag flags;
 		if( ( result = OBJ_GetFlags( m_hObj, &flags ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return flags;
 	}
@@ -996,7 +999,7 @@ public:
 		delete [] pBuf;
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return value;
 	}
@@ -1012,7 +1015,7 @@ public:
 		unsigned int isDefault;
 		if( ( result = OBJ_IsDefault( m_hObj, &isDefault ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return isDefault != 0;
 	}
@@ -1100,7 +1103,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_RestoreDefault( m_hObj ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 #ifndef DOTNET_ONLY_CODE
 		return *this;
@@ -1114,7 +1117,7 @@ public:
 		TComponentType type;
 		if( ( result = OBJ_GetType( m_hObj, &type ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return type;
 	}
@@ -1142,7 +1145,7 @@ public:
 		delete [] pBuf;
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return value;
 	}
@@ -1157,7 +1160,7 @@ public:
 		TComponentVisibility visibility;
 		if( ( result = OBJ_GetVisibility( m_hObj, &visibility ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return visibility;
 	}
@@ -1178,7 +1181,7 @@ public:
 		delete [] pBuf;
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return value;
 	}
@@ -1199,7 +1202,7 @@ public:
 		delete [] pBuf;
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID );
 		}
 		return value;
 	}
@@ -1408,10 +1411,10 @@ public:
 	{
 		m_pRefData->callbackUserData_.pUserData_ = pUserData;
 		m_pRefData->callbackUserData_.pCallback_ = this;
-		TPROPHANDLING_ERROR result = OBJ_CreateCallback( ctOnChanged, (void*)(myCallback), &m_pRefData->callbackUserData_, &m_pRefData->handle_ );
+		TPROPHANDLING_ERROR result = OBJ_CreateCallback( ctOnChanged, myCallback, &m_pRefData->callbackUserData_, &m_pRefData->handle_ );
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID );
 		}
 	}
 	/// \brief Copy constructor
@@ -1468,7 +1471,7 @@ public:
 		TPROPHANDLING_ERROR result = OBJ_AttachCallback( c.hObj(), m_pRefData->handle_ );
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID );
 		}
 		m_pRefData->objectsRegistered_.insert( c.hObj() );
 		return true;
@@ -1489,7 +1492,7 @@ public:
 		TPROPHANDLING_ERROR result = OBJ_DetachCallback( c.hObj(), m_pRefData->handle_ );
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID );
 		}
 		m_pRefData->objectsRegistered_.erase( *it );
 		return true;
@@ -1579,7 +1582,7 @@ public:
 			if( ( result = OBJ_GetHandleEx( baselist, pathToSearchBase.c_str(), &hList, smIgnoreProperties | smIgnoreMethods, 0 ) ) != PROPHANDLING_NO_ERROR )
 			{
 				std::string explanation = "feature list '" + pathToSearchBase + "' is not available for this device ";
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj, explanation);
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj, explanation);
 			}
 			m_hObj = baselist;
 			m_searchbase = hList;
@@ -1600,7 +1603,7 @@ public:
 		HOBJ hObj;
 		if( ( result = OBJ_GetHandleEx( m_searchbase, name.c_str(), &hObj, searchmode, maxSearchDepth ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return hObj;
 	}
@@ -1859,7 +1862,7 @@ public:
 		HOBJ nextSibling;
 		if( ( result = OBJ_GetNextSibling( m_hObj, &nextSibling ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		m_hObj = nextSibling;
 		return *this;
@@ -1883,7 +1886,7 @@ public:
 		HOBJ firstSibling;
 		if( ( result = OBJ_GetFirstSibling( m_hObj, &firstSibling ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return ComponentIterator(firstSibling);
 	}
@@ -1896,7 +1899,7 @@ public:
 		HOBJ lastSibling;
 		if( ( result = OBJ_GetLastSibling( m_hObj, &lastSibling ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return ComponentIterator(lastSibling);
 	}
@@ -1913,7 +1916,7 @@ public:
 		HOBJ firstChild;
 		if( ( result = OBJ_GetFirstChild( m_hObj, &firstChild ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return ComponentIterator(firstChild);
 	}
@@ -1926,7 +1929,7 @@ public:
 		HOBJ parent;
 		if( ( result = OBJ_GetParent( m_hObj, &parent ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return ComponentIterator(parent);
 	}
@@ -1945,7 +1948,7 @@ public:
 	{
 		if( !isList() )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, PROPHANDLING_NOT_A_LIST, hList );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, PROPHANDLING_NOT_A_LIST, hList );
 		}
 	}
 	/// \brief Constructs a new unbound <b>mvIMPACT::acquire::ComponentList</b> object.
@@ -1958,7 +1961,7 @@ public:
 		unsigned int size;
 		if( ( result = OBJ_GetElementCount( m_hObj, &size ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return size;
 	}
@@ -1987,7 +1990,7 @@ public:
 	{
 		if( !isMeth() )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, PROPHANDLING_NOT_A_METHOD, hMeth );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, PROPHANDLING_NOT_A_METHOD, hMeth );
 		}
 	}
 	/// \brief Constructs a new unbound <b>mvIMPACT::acquire::Method</b> object.
@@ -2041,7 +2044,7 @@ public:
 		int retval;
 		if( ( result = OBJ_Execute( m_hObj, params.c_str(), delimiters.c_str(), &retval ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return retval;
 	}
@@ -2060,7 +2063,7 @@ public:
 		int retval;
 		if( ( result = OBJ_Execute( m_hObj, 0, 0, &retval ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return retval;
 	}
@@ -2073,9 +2076,10 @@ public:
 	/// don't specify parameters.
 	///
 	/// The characters have the following meaning:
-	/// - i specifies an integer value
+	/// - i specifies a 32-bit integer value
+	/// - I specifies a 64-bit integer value
 	/// - s specifies a pointer to a C-string
-	/// - f specifies a float value
+	/// - f specifies a double precision float value
 	/// - p specifies a pointer value
 	/// - v specifies a void return value
 	///
@@ -2210,7 +2214,7 @@ protected:
 			// when reading a set of values, these can't include limits or any other value associated with
 			// a negative index parameter to avoid confusion cause by END_OF_LIST
 			// having the same value as PROP_MAX_VAL.
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, PROPHANDLING_INVALID_INPUT_PARAMETER, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, PROPHANDLING_INVALID_INPUT_PARAMETER, m_hObj );
 		}
 		return ( end == END_OF_LIST ) ? ( valCount() - start ) : ( end - start + 1 );
 	}
@@ -2229,7 +2233,7 @@ public:
 	{
 		if( !isProp() )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, PROPHANDLING_NOT_A_PROPERTY, hProp );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, PROPHANDLING_NOT_A_PROPERTY, hProp );
 		}
 	}
 	/// \brief Checks if this enumerated property allows the combination of enum values.
@@ -2285,7 +2289,7 @@ public:
 		unsigned int size = 0;
 		if( ( result = OBJ_GetDictSize( m_hObj, &size ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return size;
 	}
@@ -2307,7 +2311,7 @@ public:
 		unsigned int isDefined;
 		if( ( result = OBJ_IsConstantDefined( m_hObj, constant, &isDefined ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return isDefined != 0;
 	}
@@ -2334,7 +2338,7 @@ public:
 		delete [] pBuf;
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return value;
 	}
@@ -2401,7 +2405,7 @@ public:
 		delete [] pBuf;
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return value;
 	}
@@ -2419,7 +2423,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_RemoveVal( m_hObj, index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 #ifndef DOTNET_ONLY_CODE
 			return *this;
@@ -2476,7 +2480,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_SetValCount( m_hObj, newSize ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 #ifndef DOTNET_ONLY_CODE
 		return *this;
@@ -2500,7 +2504,7 @@ public:
 		unsigned int valCount;
 		if( ( result = OBJ_GetValCount( m_hObj, &valCount ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return valCount;
 	}
@@ -2516,7 +2520,7 @@ public:
 		unsigned int maxValCount;
 		if( ( result = OBJ_GetMaxValCount( m_hObj, &maxValCount ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return maxValCount;
 	}
@@ -2561,7 +2565,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_SetS( m_hObj, value.c_str(), index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj, value );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj, value );
 		}
 #ifndef DOTNET_ONLY_CODE
 		return *this;
@@ -2646,7 +2650,7 @@ public:
 	{
 		if( type() != ctPropFloat )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
 		}
 	}
 #if !defined(DOXYGEN_SHOULD_SKIP_THIS) && !defined(WRAP_ANY)
@@ -2708,7 +2712,7 @@ public:
 
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return *this;
 	}
@@ -2737,7 +2741,7 @@ public:
 
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return translationString;
 	}
@@ -2754,7 +2758,7 @@ public:
 		double value;
 		if( ( result = OBJ_GetFDictEntry( m_hObj, 0, 0, &value, index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return static_cast<ZYX>(result);
 	}
@@ -2775,7 +2779,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_GetF( m_hObj, &val, index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return static_cast<ZYX>(val);
 	}
@@ -2838,7 +2842,7 @@ public:
 			delete [] pValues;
 			if( result != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 		}
 		else
@@ -2869,7 +2873,7 @@ public:
 		{
 			std::ostringstream oss;
 			oss << value;
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj, oss.str() );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj, oss.str() );
 		}
 #ifndef DOTNET_ONLY_CODE
 		return *this;
@@ -2935,7 +2939,7 @@ public:
 			delete [] pValues;
 			if( result != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 #ifndef DOTNET_ONLY_CODE
 			return *this;
@@ -2973,7 +2977,7 @@ public:
 		TComponentType compType = type();
 		if( ( compType != ctPropInt ) && ( compType != ctPropInt64 ) ) 
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
 		}
 	}
 #if !defined(DOXYGEN_SHOULD_SKIP_THIS) && !defined(WRAP_ANY)
@@ -3035,7 +3039,7 @@ public:
 
 			if( result != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 			return *this;
 		}
@@ -3064,7 +3068,7 @@ public:
 
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return translationString;
 	}
@@ -3081,7 +3085,7 @@ public:
 		int value;
 		if( ( result = OBJ_GetIDictEntry( m_hObj, 0, 0, &value, index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return static_cast<ZYX>(value);
 	}
@@ -3102,7 +3106,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_GetI( m_hObj, &val, index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return static_cast<ZYX>(val);
 	}
@@ -3165,7 +3169,7 @@ public:
 			delete [] pValues;
 			if( result != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 		}
 		else
@@ -3196,7 +3200,7 @@ public:
 		{
 			std::ostringstream oss;
 			oss << value;
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj, oss.str() );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj, oss.str() );
 		}
 #ifndef DOTNET_ONLY_CODE
 			return *this;
@@ -3262,7 +3266,7 @@ public:
 			delete [] pValues;
 			if( result != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 #ifndef DOTNET_ONLY_CODE
 			return *this;
@@ -3563,6 +3567,16 @@ PYTHON_ONLY(ENUM_PROPERTY(PropertyIDeviceTriggerInterface, EnumPropertyI, mvIMPA
 typedef EnumPropertyI<TDigIOState> PropertyIDigIOState;
 PYTHON_ONLY(ENUM_PROPERTY(PropertyIDigIOState, EnumPropertyI, mvIMPACT::acquire::TDigIOState))
 
+#ifndef IGNORE_MVBLUEFOX_SPECIFIC_DOCUMENTATION
+	/// \brief Defines a property for values defined by <b>mvIMPACT::acquire::TDigitalIOMeasurementMode</b>
+	typedef EnumPropertyI<TDigitalIOMeasurementMode> PropertyIDigitalIOMeasurementMode;
+	PYTHON_ONLY(ENUM_PROPERTY(PropertyIDigitalIOMeasurementMode, EnumPropertyI, mvIMPACT::acquire::TDigitalIOMeasurementMode))
+
+	/// \brief Defines a property for values defined by <b>mvIMPACT::acquire::TDigitalIOMeasurementSource</b>
+	typedef EnumPropertyI<TDigitalIOMeasurementSource> PropertyIDigitalIOMeasurementSource;
+	PYTHON_ONLY(ENUM_PROPERTY(PropertyIDigitalIOMeasurementSource, EnumPropertyI, mvIMPACT::acquire::TDigitalIOMeasurementSource))
+#endif // #ifndef IGNORE_MVBLUEFOX_SPECIFIC_DOCUMENTATION
+
 #ifndef IGNORE_MVGRABBER_SPECIFIC_DOCUMENTATION
 	/// \brief Defines a property for values defined by <b>mvIMPACT::acquire::TDigitalOutputControlMode</b>
 	typedef EnumPropertyI<TDigitalOutputControlMode> PropertyIDigitalOutputControlMode;
@@ -3584,6 +3598,14 @@ PYTHON_ONLY(ENUM_PROPERTY(PropertyIFlatFieldFilterMode, EnumPropertyI, mvIMPACT:
 /// \brief Defines a property for values defined by <b>mvIMPACT::acquire::THWUpdateResult</b>
 typedef EnumPropertyI<THWUpdateResult> PropertyIHWUpdateResult;
 PYTHON_ONLY(ENUM_PROPERTY(PropertyIHWUpdateResult, EnumPropertyI, mvIMPACT::acquire::THWUpdateResult))
+
+/// \brief Defines a property for values defined by <b>mvIMPACT::acquire::TI2COperationMode</b>
+typedef EnumPropertyI<TI2COperationMode> PropertyII2COperationMode;
+PYTHON_ONLY(ENUM_PROPERTY(PropertyII2COperationMode, EnumPropertyI, mvIMPACT::acquire::TI2COperationMode))
+
+/// \brief Defines a property for values defined by <b>mvIMPACT::acquire::TI2COperationStatus</b>
+typedef EnumPropertyI<TI2COperationStatus> PropertyII2COperationStatus;
+PYTHON_ONLY(ENUM_PROPERTY(PropertyII2COperationStatus, EnumPropertyI, mvIMPACT::acquire::TI2COperationStatus))
 
 /// \brief Defines a property for values defined by <b>mvIMPACT::acquire::TImageBufferPixelFormat</b>
 typedef EnumPropertyI<TImageBufferPixelFormat> PropertyIImageBufferPixelFormat;
@@ -3769,7 +3791,7 @@ public:
 	{
 		if( type() != ctPropInt64 )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
 		}
 	}
 #if !defined(DOXYGEN_SHOULD_SKIP_THIS) && !defined(WRAP_ANY)
@@ -3830,7 +3852,7 @@ public:
 
 			if( result != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 			return *this;
 		}
@@ -3859,7 +3881,7 @@ public:
 
 		if( result != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return translationString;
 	}
@@ -3876,7 +3898,7 @@ public:
 		int64_type value;
 		if( ( result = OBJ_GetI64DictEntry( m_hObj, 0, 0, &value, index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return static_cast<ZYX>(value);
 	}
@@ -3897,7 +3919,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_GetI64( m_hObj, &val, index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return static_cast<ZYX>(val);
 	}
@@ -3960,7 +3982,7 @@ public:
 			delete [] pValues;
 			if( result != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 		}
 		else
@@ -3995,7 +4017,7 @@ public:
 #	else
 			oss << value;
 #endif // #if defined(_MSC_VER) && ( _MSC_VER < 1300 ) // is 'old' Microsoft VC 6 compiler?
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj, oss.str() );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj, oss.str() );
 		}
 #ifndef DOTNET_ONLY_CODE
 		return *this;
@@ -4061,7 +4083,7 @@ public:
 			delete [] pValues;
 			if( result != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 #ifndef DOTNET_ONLY_CODE
 			return *this;
@@ -4097,7 +4119,7 @@ PYTHON_ONLY(ENUM_PROPERTY(PropertyIDeviceTriggerOverlap, EnumPropertyI, mvIMPACT
 		{
 			if( type() != ctPropPtr )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
 			}
 		}
 #	if !defined(DOXYGEN_SHOULD_SKIP_THIS) && !defined(WRAP_ANY)
@@ -4120,7 +4142,7 @@ PYTHON_ONLY(ENUM_PROPERTY(PropertyIDeviceTriggerOverlap, EnumPropertyI, mvIMPACT
 			TPROPHANDLING_ERROR result;
 			if( ( result = OBJ_GetP( m_hObj, &val, index ) ) != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 			return val;
 		}
@@ -4165,7 +4187,7 @@ PYTHON_ONLY(ENUM_PROPERTY(PropertyIDeviceTriggerOverlap, EnumPropertyI, mvIMPACT
 				oss.setf( std::ios::hex, std::ios::basefield );
 				oss << value;
 				oss.unsetf( std::ios::hex );
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj, oss.str() );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj, oss.str() );
 				
 			}
 			return *this;
@@ -4203,7 +4225,7 @@ public:
 	{
 		if( type() != ctPropString )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, PROPHANDLING_INVALID_PROP_VALUE_TYPE, hProp );
 		}
 	}
 #if !defined(DOXYGEN_SHOULD_SKIP_THIS) && !defined(WRAP_ANY)
@@ -4228,7 +4250,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_GetBinaryBufferSize( m_hObj, &val, index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return val;
 	}
@@ -4249,7 +4271,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_GetBinaryBufferMaxSize( m_hObj, &val ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 		return val;
 	}
@@ -4321,7 +4343,7 @@ public:
 			delete [] pBuf;
 			if( result != PROPHANDLING_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 			}
 			return data;
 		}
@@ -4489,7 +4511,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_SetBinary( m_hObj, value.c_str(), static_cast<unsigned int>(value.size()), index ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hObj );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hObj );
 		}
 #ifndef DOTNET_ONLY_CODE
 		return *this;
@@ -4780,7 +4802,7 @@ public:
 		TDMR_ERROR result = DMR_CreateUserDataEntry( m_hDev, &hList );
 		if( result != DMR_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result );
 		}
 		return UserDataEntry( hList );
 	}
@@ -4802,7 +4824,7 @@ public:
 		userDataEntry.m_hList = INVALID_ID;
 		if( result != DMR_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result );
 		}
 	}
 	/// \brief Returns An object to work with an existing entry of user specific data.
@@ -4865,7 +4887,7 @@ public:
 		TDMR_ERROR result = DMR_WriteUserDataToHardware( m_hDev );
 		if( result != DMR_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result );
 		}
 	}
 	PYTHON_ONLY(%immutable;)
@@ -4876,12 +4898,9 @@ public:
 	///
 	/// If a device does not support hot-plugging, this property will be invisible (<b>mvIMPACT::acquire::Component::isVisible()</b>),
 	PropertyIUserDataReconnectBehaviour reconnectBehaviour;
-	/// \brief Returns the number of bytes of user accessible non-volatile memory this device offers
-	///
-	/// \return The number of bytes of user accessible non-volatile memory this device offers.
+	/// \brief An integer property containing the number of bytes of user accessible, non-volatile memory this device has available.
 	PropertyI memoryAvailable_bytes;
-	/// \brief Returns the number of bytes of user accessible non-volatile memory currently consumed by the
-	/// data stored by the user.
+	/// \brief An integer property containing the number of bytes of user accessible, non-volatile memory currently consumed by user data.
 	///
 	/// This doesn't indicate, that all the data has already been stored in the non-volatile memory,
 	/// but is the number of bytes needed to store the current user data permanently. No check for
@@ -5086,7 +5105,8 @@ public:
 	/// can still fail because of some other process using this device.
 	///
 	/// \sa
-	/// <b>Device::open, <br>Device::close</b>
+	/// <b>Device::open,<br>
+	/// Device::close</b>
 	/// \return
 	/// - true if the device is initialised(opened) in the current process.
 	/// - false otherwise.
@@ -5119,7 +5139,7 @@ public:
 		TDMR_ERROR result;
 		if( ( result = DMR_OpenDevice( m_pRefData->m_hDev, &(m_pRefData->m_hDrv) ) ) != DMR_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID, "Open device failed" );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID, "Open device failed" );
 		}
 	}
 	/// \brief Assigns a new ID to this device.
@@ -5200,17 +5220,24 @@ public:
 	PropertyS serial;
 	/// \brief An enumerated integer property <b>(read-only)</b> containing the current state of this device.
 	///
-	/// The state e.g. tells the user if an USB device is currently unplugged or not.
+	/// This property e.g. provides information about the current state of the device. For USB devices this can e.g. indicate whether
+	/// a device is currently plugged into the system or not.
+	///
 	/// Valid values for this property are defined by the enumeration <b>mvIMPACT::acquire::TDeviceState</b>.
 	///
 	/// \if BUILD_MVBLUECOUGAR_DOCUMENTATION
-	/// In order to reduce the amount of network traffic to a minimum, this property will not be updated automatically
-	/// for network devices. Whenever the current state becomes interessting, <b>mvIMPACT::acquire::DeviceManager::updateDeviceList()</b>
-	/// should be called before checking the property.
+	/// In order to reduce the amount of network traffic to a minimum, this property will only be updated automatically
+	/// for network devices if the property <b>mvIMPACT::acquire::Device::RegisterErrorEvent</b> is set to
+	/// <b>mvIMPACT::acquire::bTrue</b>(which is the default behaviour). If the IP addresses stay the same the
+	/// connection is automatically re-established then once the device is detected by the driver again.
+	/// However if the IP address of the device and/or the network adapter of the system it is used from changes
+	/// <b>mvIMPACT::acquire::DeviceManager::updateDeviceList()</b>
+	/// must be called regardless of the value of <b>mvIMPACT::acquire::Device::RegisterErrorEvent</b> before a device
+	/// that was lost can re-establish a connection to the capture driver.
 	/// \endif
 	///
 	PropertyIDeviceState state;
-	/// \brief A integer property <b>(read-only)</b> containing the device ID associated with this device.
+	/// \brief An integer property <b>(read-only)</b> containing the device ID associated with this device.
 	///
 	/// A device ID can be used to identify a certain device in the system. The ID is an 8 bit unsigned
 	/// integer value stored in the devices EEPROM. In order to allow the detection of a device
@@ -5644,7 +5671,7 @@ public:
 		TDMR_ERROR result;
 		if( ( result = DMR_Init( &m_deviceBaseList ) ) != DMR_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID, "DMR_Init failed" );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID, "DMR_Init failed" );
 		}
 		m_pRefCnt = new int();
 		*m_pRefCnt = 1;
@@ -5661,7 +5688,7 @@ public:
 		TDMR_ERROR result;
 		if( ( result = DMR_Init( &m_deviceBaseList ) ) != DMR_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID, "DMR_Init failed" );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID, "DMR_Init failed" );
 		}
 		++(*m_pRefCnt);
 	}
@@ -5771,7 +5798,7 @@ public:
 		TDMR_ERROR result = DMR_NO_ERROR;
 		if( ( result = DMR_UpdateDeviceList( 0, 0 ) ) != DMR_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result );
 		}
 	}
 	/// \brief Returns a pointer to a <b>mvIMPACT::acquire::Device</b> object.
@@ -6202,7 +6229,7 @@ public:
 		{
 			std::ostringstream oss;
 			oss << "Couldn't find list " << sublistName << "(type: " << deviceListType << ")";
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID, oss.str() );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID, oss.str() );
 		}
 		bindSearchBase( hList );
 		return searchbase_id();
@@ -6541,13 +6568,17 @@ public:
 							infoExposeTime_us(src.infoExposeTime_us), infoTransferDelay_us(src.infoTransferDelay_us), infoGain_dB(src.infoGain_dB),
 							infoTimeStamp_us(src.infoTimeStamp_us), infoSettingUsed(src.infoSettingUsed), infoImageAverage(src.infoImageAverage),
 							infoVideoChannel(src.infoVideoChannel), infoCameraOutputUsed(src.infoCameraOutputUsed), infoLineCounter(src.infoLineCounter),
-							infoMissingData_pc(src.infoMissingData_pc), infoIOStatesAtExposureStart(src.infoIOStatesAtExposureStart), infoIOStatesAtExposureEnd(src.infoIOStatesAtExposureEnd),
-							chunkOffsetX(src.chunkOffsetX), chunkOffsetY(src.chunkOffsetY), chunkWidth(src.chunkWidth), chunkHeight(src.chunkHeight), chunkPixelFormat(src.chunkPixelFormat),
-							chunkDynamicRangeMin(src.chunkDynamicRangeMin), chunkDynamicRangeMax(src.chunkDynamicRangeMax), chunkTimestamp(src.chunkTimestamp), chunkLineStatusAll(src.chunkLineStatusAll),
-							imageMemoryMode(src.imageMemoryMode), imagePixelFormat(src.imagePixelFormat), imageData(src.imageData), imageSize(src.imageSize), imageFooter(src.imageFooter), imageFooterSize(src.imageFooterSize),
-							imagePixelPitch(src.imagePixelPitch), imageChannelCount(src.imageChannelCount), imageChannelOffset(src.imageChannelOffset), imageChannelBitDepth(src.imageChannelBitDepth), imageLinePitch(src.imageLinePitch),
-							imageChannelDesc(src.imageChannelDesc), imageBytesPerPixel(src.imageBytesPerPixel), imageOffsetX(src.imageOffsetX), imageOffsetY(src.imageOffsetY), imageWidth(src.imageWidth), imageWidthTotal(src.imageWidthTotal),
-							imageHeight(src.imageHeight), imageHeightTotal(src.imageHeightTotal), imageBayerMosaicParity(src.imageBayerMosaicParity)
+							infoMissingData_pc(src.infoMissingData_pc), infoIOStatesAtExposureStart(src.infoIOStatesAtExposureStart),
+							infoIOStatesAtExposureEnd(src.infoIOStatesAtExposureEnd),
+							chunkOffsetX(src.chunkOffsetX), chunkOffsetY(src.chunkOffsetY), chunkWidth(src.chunkWidth), chunkHeight(src.chunkHeight),
+							chunkPixelFormat(src.chunkPixelFormat), chunkDynamicRangeMin(src.chunkDynamicRangeMin), chunkDynamicRangeMax(src.chunkDynamicRangeMax),
+							chunkTimestamp(src.chunkTimestamp), chunkLineStatusAll(src.chunkLineStatusAll),
+							imageMemoryMode(src.imageMemoryMode), imagePixelFormat(src.imagePixelFormat),
+							imageData(src.imageData), imageSize(src.imageSize), imageFooter(src.imageFooter), imageFooterSize(src.imageFooterSize),
+							imagePixelPitch(src.imagePixelPitch), imageChannelCount(src.imageChannelCount), imageChannelOffset(src.imageChannelOffset),
+							imageChannelBitDepth(src.imageChannelBitDepth), imageLinePitch(src.imageLinePitch), imageChannelDesc(src.imageChannelDesc),
+							imageBytesPerPixel(src.imageBytesPerPixel), imageOffsetX(src.imageOffsetX), imageOffsetY(src.imageOffsetY), imageWidth(src.imageWidth),
+							imageWidthTotal(src.imageWidthTotal), imageHeight(src.imageHeight), imageHeightTotal(src.imageHeightTotal), imageBayerMosaicParity(src.imageBayerMosaicParity)
 	{
 		++(m_pRefData->m_refCnt);
 	}
@@ -6845,10 +6876,10 @@ public:
 	/// \note This property is not supported by every device. Therefore always call the function <b>mvIMPACT::acquire::Component::isValid</b>
 	/// to check if this property is available or not.
 	PropertyICameraOutput infoCameraOutputUsed;
-	/// \brief An integer property <b>(read-only)</b> containing the line number since the last trigger event.
+	/// \brief An integer property <b>(read-only)</b> containing the amount of lines since the last trigger event.
 	///
 	/// Will contain 
-	/// - the line number since last trigger event of the first line of the snap if line counting is enabled
+	/// - the amount of lines since last trigger event of the first line of the snap if line counting is enabled
 	/// - -1 otherwise
 	///
 	/// \note This property is not supported by every device. Therefore always call the function <b>mvIMPACT::acquire::Component::isValid</b>
@@ -6890,6 +6921,20 @@ public:
 	/// <tr><td class="indexvalue">3</td><td class="indexvalue">in 1</td></tr>
 	/// <tr><td class="indexvalue">4</td><td class="indexvalue">out 2</td></tr>
 	/// <tr><td class="indexvalue">5</td><td class="indexvalue">out 3</td></tr>
+	/// </table>
+	/// \elseif BUILD_MVBLUEFOX_DOCUMENTATION
+	/// The following table documents which bit in this property represents the state of which digital I/O:
+	///
+	/// <table>
+	/// <tr><td class="header">bit</td><td class="header">IO</td></tr>
+	/// <tr><td class="indexvalue">0</td><td class="indexvalue">in 0</td></tr>
+	/// <tr><td class="indexvalue">1</td><td class="indexvalue">in 1</td></tr>
+	/// <tr><td class="indexvalue">2</td><td class="indexvalue">in 2(if available)</td></tr>
+	/// <tr><td class="indexvalue">3</td><td class="indexvalue">in 3(if available)</td></tr>
+	/// <tr><td class="indexvalue">4</td><td class="indexvalue">out 0</td></tr>
+	/// <tr><td class="indexvalue">5</td><td class="indexvalue">out 1</td></tr>
+	/// <tr><td class="indexvalue">6</td><td class="indexvalue">out 2(if available)</td></tr>
+	/// <tr><td class="indexvalue">7</td><td class="indexvalue">out 3(if available)</td></tr>
 	/// </table>
 	/// \endif
 	///
@@ -6999,9 +7044,9 @@ public:
 	///
 	/// \note
 	/// It's not always necessary to copy the image data! Each image buffer is an
-	/// integral part of the <b>mvIMPACT::acquire::Request</b> object returned to the user by a call to 
+	/// integral part of the <b>mvIMPACT::acquire::Request</b> object returned to the user by a call to
 	/// the corresponding 'waitFor' function offered by the interface.
-	/// The data in this buffer remains valid until the user either 
+	/// The data in this buffer remains valid until the user either
 	/// unlocks the request buffer or closes the <b>mvIMPACT::acquire::Device</b> again.
 	///
 	/// \note
@@ -7014,7 +7059,9 @@ public:
 	///
 	/// \note This property will become writeable if this request is in configuration mode.
 	/// \sa
-	/// <b>mvIMPACT::acquire::FunctionInterface::imageRequestConfigure</b>
+	/// <b>mvIMPACT::acquire::FunctionInterface::imageRequestConfigure,<br>
+	///    mvIMPACT::acquire::Request::imageDataSize,<br>
+	///    mvIMPACT::acquire::Request::imageFooterSize</b>
 	PropertyPtr imageData;
 	/// \brief An integer property <b>(read-only)</b> containing the size (in bytes) of the whole image.
 	///
@@ -7099,7 +7146,7 @@ public:
 	PropertyI imageOffsetY;
 	/// An integer property <b>(read-only)</b> containing the width of the image in pixel.
 	PropertyI imageWidth;
-	/// An integer property <b>(read-only)</b> containing the total width of the image in pixel if this buffer is part of a larger image.
+	/// \brief An integer property <b>(read-only)</b> containing the total width of the image in pixel if this buffer is part of a larger image.
 	///
 	/// \note
 	/// This feature will be supported by devices using an mvIMPACT Acquire driver greater or equal version 1.11.50. Not
@@ -7107,9 +7154,9 @@ public:
 	/// not deliver parts of a larger image, then this property will always contain the same value as returned by
 	/// <b>mvIMPACT::acquire::Request::imageWidth</b>.
 	PropertyI imageWidthTotal;
-	/// An integer property <b>(read-only)</b> containing the height of the image in pixel.
+	/// \brief An integer property <b>(read-only)</b> containing the height of the image in pixel.
 	PropertyI imageHeight;
-	/// An integer property <b>(read-only)</b> containing the total height of the image in pixel.
+	/// \brief An integer property <b>(read-only)</b> containing the total height of the image in pixel.
 	///
 	/// \note
 	/// This feature will be supported by devices using an mvIMPACT Acquire driver greater or equal version 1.11.50. Not
@@ -7221,7 +7268,7 @@ public:
 		TPROPHANDLING_ERROR result;
 		if( ( result = OBJ_RestoreDefault( m_hRoot ) ) != PROPHANDLING_NO_ERROR )
 		{
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, m_hRoot );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, m_hRoot );
 		}
 #ifndef DOTNET_ONLY_CODE
 		return *this;
@@ -8199,19 +8246,34 @@ protected:
 	}
 public:
 	PYTHON_ONLY(%immutable;)
-	/// \brief An integer property <b>(read-only)</b> containing the device driver version of this device.
+	/// \brief An integer property <b>(read-only)</b> containing the device driver version used by this device.
 	///
 	/// This is the version of the underlying hardware driver. For device drivers that don't have another
 	/// user mode driver below the interface driver this property will contain the same version information
 	/// as the property <b>mvIMPACT::acquire::InfoBase::driverVersion</b>.
 	PropertyS deviceDriverVersion;
-	/// \brief A string property <b>(read-only)</b> containing the date this driver has been compiled.
+	/// \brief A string property <b>(read-only)</b> containing the date the device driver has been compiled.
 	PropertyS driverDate;
-	/// \brief A string property <b>(read-only)</b> containing the version number of this driver.
+	/// \brief A string property <b>(read-only)</b> containing the version number of the device driver.
 	PropertyS driverVersion;
 	/// \brief An enumerated integer property <b>(read-only)</b> containing the current state of this device.
 	///
+	/// This property e.g. provides information about the current state of the device. For USB devices this can e.g. indicate whether
+	/// a device is currently plugged into the system or not.
+	///
 	/// Valid values for this property are defined by the enumeration <b>mvIMPACT::acquire::TDeviceState</b>.
+	///
+	/// \if BUILD_MVBLUECOUGAR_DOCUMENTATION
+	/// In order to reduce the amount of network traffic to a minimum, this property will only be updated automatically
+	/// for network devices if the property <b>mvIMPACT::acquire::Device::RegisterErrorEvent</b> is set to
+	/// <b>mvIMPACT::acquire::bTrue</b>(which is the default behaviour). If the IP addresses stay the same the
+	/// connection is automatically re-established then once the device is detected by the driver again.
+	/// However if the IP address of the device and/or the network adapter of the system it is used from changes
+	/// <b>mvIMPACT::acquire::DeviceManager::updateDeviceList()</b>
+	/// must be called regardless of the value of <b>mvIMPACT::acquire::Device::RegisterErrorEvent</b> before a device
+	/// that was lost can re-establish a connection to the capture driver.
+	/// \endif
+	///
 	PropertyIDeviceState state;
 	/// \brief A string property <b>(read-only)</b> containing the name of the setting currently loaded.
 	PropertyS loadedSettings;
@@ -8413,20 +8475,22 @@ public:
 	/// device and its driver.
 	///
 	/// This class contains a collection of properties providing various information about
-	/// a <b>mvBlueFOX</b> device and its driver. 
+	/// a <b>mvBlueFOX</b> device and its driver.
 	class InfoBlueFOX : public InfoBlueDevice
 	//-----------------------------------------------------------------------------
 	{
 	public:
 		/// \brief Constructs a new <b>mvIMPACT::acquire::InfoBlueFOX</b> object.
 		explicit InfoBlueFOX(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
-								Device* pDev ) : InfoBlueDevice(pDev), firmwareVersion(), sensorFPGAVersion(), sensorCaps()
+								Device* pDev ) : InfoBlueDevice(pDev), firmwareVersion(), sensorFPGAVersion(), sensorCaps(),
+								  userEEPROMSize()
 		{
 			ComponentLocator locator(m_hRoot);
 			locator.bindComponent( firmwareVersion, "FirmwareVersion" );
 			locator.bindSearchBase( locator.searchbase_id(), "Camera" );
 			locator.bindComponent( sensorFPGAVersion, "SensorFPGAVersion" );
 			locator.bindComponent( sensorCaps, "SensorCaps" );
+			locator.bindComponent( userEEPROMSize, "UserEEPROMSize" );
 		}
 		PYTHON_ONLY(%immutable;)
 		/// \brief An integer property <b>(read-only)</b> containing the firmware version of this device.
@@ -8442,11 +8506,22 @@ public:
 		/// \note
 		/// If nothing is known about this feature, this property will contain '-1'.
 		PropertyI sensorCaps;
+		/// \brief An integer property <b>(read-only)</b> containing the size of the user EEPROM that can be accessed
+		/// using the I2C access features of <b>mvIMPACT::acquire::I2CControl</b>.
+		///
+		/// \note
+		/// The size may vary depending on the product. Even different products with the same sensor might report
+		/// different values here.
+		///
+		/// \note
+		/// The user EEPROM uses a virtual I2C address of 0x1A2 for write access and 0x1A3 for read access.
+		PropertyI userEEPROMSize;
 		PYTHON_ONLY(%mutable;)
 	#ifdef DOTNET_ONLY_CODE
-		PropertyI							getFirmwareVersion( void ) const { return firmwareVersion; }
-		PropertyI							getSensorFPGAVersion( void ) const { return sensorFPGAVersion; }
-		PropertyI							getSensorCaps( void ) const { return sensorCaps; }
+		PropertyI getFirmwareVersion( void ) const { return firmwareVersion; }
+		PropertyI getSensorFPGAVersion( void ) const { return sensorFPGAVersion; }
+		PropertyI getSensorCaps( void ) const { return sensorCaps; }
+		PropertyI getUserEEPROMSize( void ) const { return userEEPROMSize; }
 	#endif // #ifdef DOTNET_ONLY_CODE
 	};
 #endif // #ifndef IGNORE_MVBLUEFOX_SPECIFIC_DOCUMENTATION
@@ -8816,10 +8891,10 @@ public:
 ///
 /// using namespace mvIMPACT::acquire;
 ///
-/// void runAt10Hz( Device* pBf )
+/// void runAt10Hz( Device* pBF )
 /// {
-///   CameraSettingsBlueFOX bfs( pBf );
-///   IOSubSystemBlueFOX bfIOs( pBf );
+///   CameraSettingsBlueFOX bfs( pBF );
+///   IOSubSystemBlueFOX bfIOs( pBF );
 ///   // define a HRTC program that results in a define image frequency
 ///   // the hardware real time controller shall be used to trigger an image
 ///   bfs.triggerSource.write( ctsRTCtrl );
@@ -9426,7 +9501,7 @@ public:
 		{
 			std::ostringstream oss;
 			oss << "Couldn't obtain event data for event type " << m_type << "(string representation: " << type.name() << ")";
-			ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID, oss.str() );
+			ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID, oss.str() );
 		}
 		return m_data;
 	}
@@ -9884,9 +9959,9 @@ public:
 	/// using namespace std;
 	/// using namespace mvIMPACT::acquire;
 	///
-	/// void doSomeIOStuff( Device* pBf )
+	/// void doSomeIOStuff( Device* pBF )
 	/// {
-	///   IOSubSystemBlueFOX bfIOs( pBf );
+	///   IOSubSystemBlueFOX bfIOs( pBF );
 	///   cout << "output 0 was " << bfIOs.output(0)->get() << " and is now(after flipping) ";
 	///   bfIOs.output(0)->flip();
 	///   cout << bfIOs.output(0)->get() << endl;
@@ -10529,7 +10604,7 @@ public:
 			OutputProperties* p = getOutputProperties( pOutput );
 			if( !p )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, DMR_FEATURE_NOT_AVAILABLE, INVALID_ID, "Unsupported feature query(Could not obtain pointer to output properties)" );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, DMR_FEATURE_NOT_AVAILABLE, INVALID_ID, "Unsupported feature query(Could not obtain pointer to output properties)" );
 			}
 			return p->mode.read();
 		}
@@ -11178,7 +11253,7 @@ public:
 			OutputProperties* p = getOutputProperties( pOutput );
 			if( !p || !p->digitalSignal.isValid() || !p->digitalSignal.hasDict() )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, DMR_FEATURE_NOT_AVAILABLE, ( p && p->digitalSignal.isValid() ) ? p->digitalSignal.hObj() : INVALID_ID, "Unsupported feature query" );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, DMR_FEATURE_NOT_AVAILABLE, ( p && p->digitalSignal.isValid() ) ? p->digitalSignal.hObj() : INVALID_ID, "Unsupported feature query" );
 			}
 			return p->digitalSignal.getTranslationDictValue( index );
 		}
@@ -11214,7 +11289,7 @@ public:
 			OutputProperties* p = getOutputProperties( pOutput );
 			if( !p || !p->digitalSignal.isValid() || !p->digitalSignal.hasDict() )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, DMR_FEATURE_NOT_AVAILABLE, ( p && p->digitalSignal.isValid() ) ? p->digitalSignal.hObj() : INVALID_ID, "Unsupported feature query" );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, DMR_FEATURE_NOT_AVAILABLE, ( p && p->digitalSignal.isValid() ) ? p->digitalSignal.hObj() : INVALID_ID, "Unsupported feature query" );
 			}
 			return p->digitalSignal.getTranslationDictString( index );
 		}
@@ -11700,13 +11775,14 @@ public:
 												/// settings can be created with the function
 												/// <b>mvIMPACT::acquire::FunctionInterface::createSetting</b>
 												const std::string& settingName = "Base" ) : CameraSettingsBase(pDev, settingName),
-												gain_dB(), testMode(), channelBitDepth(), frameDelay_us(), imageDirectory(), imageType(),
+												gain_dB(), testMode(), channelBitDepth(), paddingX(), frameDelay_us(), imageDirectory(), imageType(),
 												bayerMosaicParity(), testImageBarWidth(), userData()
 		{
 			ComponentLocator locator(m_hRoot);
 			locator.bindComponent( gain_dB, "Gain_dB" );
 			locator.bindComponent( testMode, "TestMode" );
 			locator.bindComponent( channelBitDepth, "ChannelBitDepth" );
+			locator.bindComponent( paddingX, "PaddingX" );
 			locator.bindComponent( frameDelay_us, "FrameDelay_us" );
 			locator.bindComponent( imageDirectory, "ImageDirectory" );
 			locator.bindComponent( imageType, "ImageType" );
@@ -11727,6 +11803,14 @@ public:
 		/// <b>mvIMPACT::acquire::vdtmMovingBayerDataRamp</b> or <b>mvIMPACT::acquire::vdtmBayerWhiteBalanceTestImage</b> this property
 		/// will allow to define the pixel format for the test image.
 		PropertyI channelBitDepth;
+		/// \brief An integer property defining the padding(in bytes) in X-direction for certain test image generation modes.
+		///
+		/// When <b>mvIMPACT::acquire::CameraSettingsVirtualDevice::testMode</b> is set to a mono format(not the weird packed ones!),
+		/// <b>mvIMPACT::acquire::vdtmMovingBayerDataRamp</b> or <b>mvIMPACT::acquire::vdtmBayerWhiteBalanceTestImage</b> this property
+		/// will allow to define the padding in bytes for each line. This will result in images where the line pitch differs from 
+		/// the width multiplied by the bytes per pixel value. E.g. a padding of 1 in X-direction and a width of 5 for a 16 bit mono
+		/// format will result in a line pitch of 11 bytes(5*2 + 1).
+		PropertyI paddingX;
 		/// \brief An integer property defining a delay in us before the 'captured' image is returned to the user
 		PropertyI frameDelay_us;
 		/// \brief A string property defining the directory to capture images from.
@@ -11759,6 +11843,7 @@ public:
 		PropertyF getGain_dB( void ) const { return gain_dB; }
 		PropertyIVirtualDeviceTestMode getTestMode( void ) const { return testMode; }
 		PropertyI getChannelBitDepth( void ) const { return channelBitDepth; }
+		PropertyI getPaddingX( void ) const { return paddingX; }
 		PropertyI getFrameDelay_us( void ) const { return frameDelay_us; }
 		PropertyS getImageDirectory( void ) const { return imageDirectory; }
 		PropertyIVirtualDeviceImageType getImageType( void ) const { return imageType; }
@@ -13158,7 +13243,7 @@ public:
 		///
 		/// This property <b>ALWAYS</b> defines a translation dictionary containing a string representation
 		/// and a numerical value for the camera descriptions available for the device. The string
-		/// representation of the camera description will be build from the name of the class this
+		/// representation of the camera description will be build from the property name of the class this
 		/// camera description belongs to (e.g. \a 'Standard', \a 'NonStandard' or \a 'CameraLink') and
 		/// the name of the camera description itself. Assuming a the device can handle standard
 		/// video cameras and a description for a camera named \a 'MyCCIRCamera' will therefore
@@ -14206,7 +14291,7 @@ public:
 			HLIST hList;
 			if( ( result = DMR_FindList( pDev->hDrv(), 0, dmltCameraDescriptions, 0, &hList ) ) != DMR_NO_ERROR )
 			{
-				ExceptionFactory::raiseException( __FUNCTION__, __LINE__, result, INVALID_ID, "Couldn't find camera description list (is this a frame grabber?)" );
+				ExceptionFactory::raiseException( MVIA_FUNCTION, __LINE__, result, INVALID_ID, "Couldn't find camera description list (is this a frame grabber?)" );
 			}
 			m_pRefData = new ReferenceCountedData(pDev->hDrv(), hList);
 		}
@@ -14738,7 +14823,7 @@ public:
 	///
 	/// The gamma value will be used to calculate the corresponding input -> output transformation LUT.
 	///
-	/// The following formular will be used:
+	/// The following formula will be used:
 	///\code
 	///  ( ( 1 + gammaAlpha ) * inputValue^(1/gamma) ) - gammaAlpha
 	///\endcode
@@ -14760,7 +14845,7 @@ public:
 	/// <b>mvIMPACT::acquire::bFalse</b> or if <b>mvIMPACT::acquire::ImageProcessing::LUTMode</b> is \b NOT set to
 	/// <b>mvIMPACT::acquire::LUTmGamma</b>.
 	PropertyILUTGammaMode gammaMode;
-	/// \brief An integer property which can be used to define a start threshold above which the gamma correction formular shall be used in
+	/// \brief An integer property which can be used to define a start threshold above which the gamma correction formula shall be used in
 	/// <b>mvIMPACT::acquire::LUTParameters::gammaMode</b> <b>mvIMPACT::acquire::LUTgmLinearStart</b>.
 	///
 	/// Values below that threshold will be calculated using linear interpolation.
@@ -14944,6 +15029,192 @@ public:
 };
 
 //-----------------------------------------------------------------------------
+/// \brief Properties for accessing features belonging to the I2C control.
+///
+/// Properties in this class will only be available if a device has a local I2C
+/// bus and this is configured for access from an application.
+///
+///\xmlonly
+/// <mvWrapperDoc><htmlinclude ref="code_fragment_start_cpp.html"/></mvWrapperDoc>
+///\endxmlonly
+///\htmlinclude code_fragment_start_cpp.html
+/// <b>EXAMPLE:</b>
+///
+///\code
+/// I2CControl i2cc(pBF);
+/// if( i2cc.I2COperationMode.isValid() )
+/// {
+///   // direct property access
+///   i2cc.I2CBufferLength.write( 0 );
+///   i2cc.I2COperationMode.write( I2ComRead );
+///   assert( ( i2cc.I2COperationExecute.call() == DMR_INVALID_PARAMETER ) && "Unexpected driver behaviour" );
+///   assert( ( i2cc.I2COperationStatus.read() == I2CosNotEnoughData ) && "Unexpected driver behaviour" );
+///   i2cc.I2COperationMode.write( I2ComWrite );
+///   i2cc.I2CBuffer.writeBinary( string() );
+///   assert( ( i2cc.I2COperationExecute.call() == DMR_INVALID_PARAMETER ) && "Unexpected driver behaviour" );
+///   assert( ( i2cc.I2COperationStatus.read() == I2CosNotEnoughData ) && "Unexpected driver behaviour" );
+///   // Write some data. This will only work if serveral conditions are met:
+///   // - there is a device that can be written to at address 0xA6
+///   // - the sub-address 0x04 is valid
+///   // - the device is designed to work with 8 bit sub-addresses
+///   // - the device can deal with 9 bytes in a single command
+///   i2cc.I2CDeviceAddress.write( 0xA6 );
+///   i2cc.I2CDeviceSubAddress.write( 0x04 );
+///   i2cc.I2CDeviceSubAddressWidth.write( 8 );
+///   char binData[9] = { 'D', 'E', 'A', 'D', ' ', 'B', 'E', 'E', 'F' };
+///   i2cc.I2CBuffer.writeBinary( string(binData, sizeof(binData)) );
+///   i2cc.I2COperationMode.write( I2ComWrite );
+///   int I2COperationExecuteResult = i2cc.I2COperationExecute.call();
+///   if( I2COperationExecuteResult != DMR_NO_ERROR )
+///   {
+///     printf( "'I2COperationExecute' write failed. Return value: %s(%d).\n", ImpactAcquireException::getErrorCodeAsString( I2COperationExecuteResult ).c_str(), I2COperationExecuteResult );
+///   }
+///   printf( "'I2COperationStatus' after write: %s.\n", i2cc.I2COperationStatus.readS().c_str() );
+///   // Read some data. Similar condition as for write apply
+///   const int bytesToRead = 4;
+///   i2cc.I2CDeviceAddress.write( 0xA8 );
+///   i2cc.I2CDeviceSubAddress.write( 0x00 );
+///   i2cc.I2CDeviceSubAddressWidth.write( 8 );
+///   i2cc.I2CBufferLength.write( bytesToRead ); // read 'bytesToRead' bytes
+///   i2cc.I2COperationMode.write( I2ComRead );
+///   i2cc.I2COperationExecute.call();
+///   I2COperationExecuteResult = i2cc.I2COperationExecute.call();
+///   if( I2COperationExecuteResult != DMR_NO_ERROR )
+///   {
+///     printf( "'I2COperationExecute' read failed. Return value: %s(%d).\n", ImpactAcquireException::getErrorCodeAsString( I2COperationExecuteResult ).c_str(), I2COperationExecuteResult );
+///   }
+///   printf( "'I2COperationStatus' after read: %s.\n", i2cc.I2COperationStatus.readS().c_str() );
+///   if( i2cc.I2CBuffer.binaryDataBufferSize() != bytesToRead )
+///   {
+///     printf( "'I2CBuffer' reports %d bytes of data while %d bytes where expected.\n", i2cc.I2CBuffer.binaryDataBufferSize(), bytesToRead );
+///   }
+///   // usage of the convenience functions
+///   i2cc.I2CWrite( 0xA4, 0x00, 8, string("TEST") );
+///   const string i2cReadBuffer = i2cc.I2CRead( 0xA4, 0x00, 8, 4 );
+/// }
+/// else
+/// {
+///   printf( "I2CControl not available.\n" );
+/// }
+///\endcode
+///\htmlinclude code_fragment_end.html
+///\xmlonly
+/// <mvWrapperDoc><htmlinclude ref="code_fragment_end.html"/></mvWrapperDoc>
+///\endxmlonly
+class I2CControl : public ComponentCollection
+//-----------------------------------------------------------------------------
+{
+private:
+	void prepareI2CAccess( int deviceAddress, int deviceSubAddress, int deviceSubAddressWidth, TI2COperationMode mode )
+	{
+		I2CDeviceAddress.write( deviceAddress );
+		I2CDeviceSubAddress.write( deviceSubAddress );
+		I2CDeviceSubAddressWidth.write( deviceSubAddressWidth );
+		I2COperationMode.write( mode );
+	}
+public:
+	/// brief Constructs a new <b>mvIMPACT::acquire::I2CControl</b> object.
+	explicit I2CControl(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
+							Device* pDev ): ComponentCollection(pDev), I2COperationMode(), I2COperationExecute(), I2COperationStatus(),
+							  I2CDeviceAddress(), I2CDeviceSubAddress(), I2CDeviceSubAddressWidth(), I2CBuffer(), I2CBufferLength()
+	{
+		DeviceComponentLocator locator(pDev, dltIOSubSystem);
+		HLIST hList = locator.findComponent( "I2CControl" );
+		if( hList != INVALID_ID )
+		{
+			locator.bindSearchBase( locator.searchbase_id(), "I2CControl" );
+			m_hRoot = locator.searchbase_id();
+			locator.bindComponent( I2COperationMode, "I2COperationMode" );
+			locator.bindComponent( I2COperationExecute, "I2COperationExecute@i" );
+			locator.bindComponent( I2COperationStatus, "I2COperationStatus" );
+			locator.bindComponent( I2CDeviceAddress, "I2CDeviceAddress" );
+			locator.bindComponent( I2CDeviceSubAddress, "I2CDeviceSubAddress" );
+			locator.bindComponent( I2CDeviceSubAddressWidth, "I2CDeviceSubAddressWidth" );
+			locator.bindComponent( I2CBuffer, "I2CBuffer" );
+			locator.bindComponent( I2CBufferLength, "I2CBufferLength" );
+		}
+	}
+	PYTHON_ONLY(%immutable;)
+	/// \brief An enumerated integer property to select the I2C operation.
+	///
+	/// The selected operation is executed when <b>mvIMPACT::acquire::I2CControl::I2COperationExecute</b> is called.
+	///
+	/// Valid values for this property are defined by the enumeration <b>mvIMPACT::acquire::TI2COperationMode</b>.
+	PropertyII2COperationMode I2COperationMode;
+	/// \brief Calling this function will execute the operation selected by <b>mvIMPACT::acquire::I2CControl::I2COperationMode</b>.
+	Method I2COperationExecute;
+	/// \brief Represents the I2C operation execution status.
+	///
+	/// Valid values for this property are defined by the enumeration <b>mvIMPACT::acquire::TI2COperationStatus</b>.
+	PropertyII2COperationStatus I2COperationStatus;
+	/// \brief An integer property storing the address of the I2C device to communicate with.
+	PropertyI I2CDeviceAddress;
+	/// \brief An integer property storing the sub-address of the I2C device to communicate with.
+	PropertyI I2CDeviceSubAddress;
+	/// \brief An enumerated integer property storing the sub-address width(in bits) of the I2C device to communicate with.
+	///
+	/// Valid values for this property are:
+	///
+	/// - 8
+	/// - 16
+	PropertyI I2CDeviceSubAddressWidth;
+	/// \brief Defines the intermediate access buffer that allows the exchange of data between the I2C device and the application.
+	///
+	/// This property can store binary data.
+	PropertyS I2CBuffer;
+	/// \brief An integer property controlling the length of the mapping between the I2C device and the <b>mvIMPACT::acquire::I2CControl::I2CBuffer</b> property.
+	PropertyI I2CBufferLength;
+	PYTHON_ONLY(%mutable;)
+	/// \brief Read data from an I2C device.
+	///
+	/// This is a convenience function that wraps the property access a little.
+	/// In order to find out if the command has been executed successfully
+	/// <b>mvIMPACT::acquire::I2CControl::I2COperationStatus</b> should be checked afterwards.
+	std::string I2CRead(	/// The address of the I2C device to communicate with.
+							int deviceAddress,
+							/// The sub-address of the I2C device to communicate with.
+							int deviceSubAddress,
+							/// The sub-address width(in bits) of the I2C device to communicate with.
+							int deviceSubAddressWidth,
+							/// The amount of bytes to read.
+							int byteCnt )
+	{
+		prepareI2CAccess( deviceAddress, deviceSubAddress, deviceSubAddressWidth, I2ComRead );
+		I2CBufferLength.write( byteCnt );
+		I2COperationExecute.call();
+		return I2CBuffer.readBinary();
+	}
+	/// \brief Write data to a I2C device.
+	///
+	/// This is a convenience function that wraps the property access a little.
+	/// In order to find out if the command has been executed successfully
+	/// <b>mvIMPACT::acquire::I2CControl::I2COperationStatus</b> should be checked afterwards.
+	void I2CWrite(	/// The address of the I2C device to communicate with.
+					int deviceAddress,
+					/// The sub-address of the I2C device to communicate with.
+					int deviceSubAddress,
+					/// The sub-address width(in bits) of the I2C device to communicate with.
+					int deviceSubAddressWidth,
+					/// The data to write to the I2C device.
+					const std::string& data )
+	{
+		prepareI2CAccess( deviceAddress, deviceSubAddress, deviceSubAddressWidth, I2ComWrite );
+		I2CBuffer.writeBinary( data );
+		I2COperationExecute.call();
+	}
+#ifdef DOTNET_ONLY_CODE
+	PropertyII2COperationMode getI2COperationMode( void ) const { return I2COperationMode; }
+	Method getI2COperationExecute( void ) const { return I2COperationExecute; }
+	PropertyII2COperationStatus getI2COperationStatus( void ) const { return I2COperationStatus; }
+	PropertyI getI2CDeviceAddress( void ) const { return I2CDeviceAddress; }
+	PropertyI getI2CDeviceSubAddress( void ) const { return I2CDeviceSubAddress; }
+	PropertyI getI2CDeviceSubAddressWidth( void ) const { return I2CDeviceSubAddressWidth; }
+	PropertyS getI2CBuffer( void ) const { return I2CBuffer; }
+	PropertyI getI2CBufferLength( void ) const { return I2CBufferLength; }
+#endif // #ifdef DOTNET_ONLY_CODE
+};
+
+//-----------------------------------------------------------------------------
 /// \brief Properties for configuring settings belonging to the motor focus control.
 ///
 /// Properties in this class will only be available if a device is fitted with
@@ -14952,6 +15223,7 @@ class MotorFocusControl : public ComponentCollection
 //-----------------------------------------------------------------------------
 {
 public:
+	/// brief Constructs a new <b>mvIMPACT::acquire::MotorFocusControl</b> object.
 	explicit MotorFocusControl(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
 								Device* pDev ): ComponentCollection(pDev), motorFocusSendBuffer(), motorFocusReceiveBuffer(), motorFocusSend(),
 								  motorFocusIncrement(), motorFocusNear(), motorFocusFar(), motorFocusAbsolutePositionCurrent(),
@@ -14977,13 +15249,13 @@ public:
 	PYTHON_ONLY(%immutable;)
 	/// \brief A string property storing a command to be send to the motor focus.
 	///
-	/// To actually send the command, the function <b>mvIMPACT::acquire::MotorFocusControl::motorFocusSend</b> must be executed
+	/// To actually send the command, the function <b>mvIMPACT::acquire::MotorFocusControl::motorFocusSend</b> must be executed.
 	PropertyS motorFocusSendBuffer;
 	/// \brief A string property <b>(read-only)</b> that will contain answers sent by the motor focus controller.
 	PropertyS motorFocusReceiveBuffer;
 	/// \brief Calling this function will send the value of <b>mvIMPACT::acquire::MotorFocusControl::motorFocusSendBuffer</b> to the hardware.
 	///
-	/// Afterwards <b>mvIMPACT::acquire::MotorFocusControl::motorFocusReceiveBuffer</b> will contain the hardwares answer
+	/// Afterwards <b>mvIMPACT::acquire::MotorFocusControl::motorFocusReceiveBuffer</b> will contain the hardwares answer.
 	Method motorFocusSend;
 	/// \brief An integer property storing an increment(in encoder counts) that will be used by subsequent calls to <b>mvIMPACT::acquire::MotorFocusControl::motorFocusNear</b> and <b>mvIMPACT::acquire::MotorFocusControl::motorFocusFar</b> commands.
 	PropertyI motorFocusIncrement;
@@ -15010,6 +15282,92 @@ public:
 	Method getMotorFocusMoveToAbsolutePositionDesired( void ) const { return motorFocusMoveToAbsolutePositionDesired; }
 #endif // #ifdef DOTNET_ONLY_CODE
 };
+
+#ifndef IGNORE_MVBLUEFOX_SPECIFIC_DOCUMENTATION
+	//-----------------------------------------------------------------------------
+	/// \brief Properties for configuring settings belonging to the digital I/O measurement.
+	///
+	/// Properties in this class will only be available if a device offers digital I/O measurement features.
+	///
+	///\xmlonly
+	/// <mvWrapperDoc><htmlinclude ref="code_fragment_start_cpp.html"/></mvWrapperDoc>
+	///\endxmlonly
+	///\htmlinclude code_fragment_start_cpp.html
+	/// <b>EXAMPLE:</b>
+	///
+	///\code
+	/// // This code fragment will print result of measurement using all modes on all sources
+	/// // to the standard output.
+	/// DigitalIOMeasurementControl iomc(getDevicePointerFromSomewhere());
+	/// if( iomc.digitalIOMeasurementMode.isValid() && iomc.digitalIOMeasurementSource.isValid() )
+	/// {
+	///   vector<pair<string, TDigitalIOMeasurementMode> > modeDict;
+	///   iomc.digitalIOMeasurementMode.getTranslationDict( modeDict );
+	///   const unsigned int modeCnt = iomc.digitalIOMeasurementMode.dictSize();
+	///   vector<pair<string, TDigitalIOMeasurementSource> > srcDict;
+	///   iomc.digitalIOMeasurementSource.getTranslationDict( srcDict );
+	///   const unsigned int srcCnt = iomc.digitalIOMeasurementSource.dictSize();
+	///   for( unsigned int i=0; i<modeCnt; i++ )
+	///   {
+	///     iomc.digitalIOMeasurementMode.write( modeDict[i].second );
+	///     for( unsigned int j=0; j<srcCnt; j++ )
+	///     {
+	///       iomc.digitalIOMeasurementSource.write( srcDict[j].second );
+	///       printf( "Digital I/O measurement result using mode '%s' at source '%s': %s\n", iomc.digitalIOMeasurementMode.readS().c_str(), iomc.digitalIOMeasurementSource.readS().c_str(), iomc.digitalIOMeasurementResult.readS().c_str() );
+	///     }
+	///   }
+	/// }
+	///\endcode
+	///\htmlinclude code_fragment_end.html
+	///\xmlonly
+	/// <mvWrapperDoc><htmlinclude ref="code_fragment_end.html"/></mvWrapperDoc>
+	///\endxmlonly
+	class DigitalIOMeasurementControl : public ComponentCollection
+	//-----------------------------------------------------------------------------
+	{
+	public:
+		/// brief Constructs a new <b>mvIMPACT::acquire::DigitalIOMeasurementControl</b> object.
+		explicit DigitalIOMeasurementControl(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
+												Device* pDev ): ComponentCollection(pDev), digitalIOMeasurementMode(), digitalIOMeasurementSource(),
+												digitalIOMeasurementResult()
+		{
+			DeviceComponentLocator locator(pDev, dltIOSubSystem);
+			HLIST hList = locator.findComponent( "DigitalIOMeasurementControl" );
+			if( hList != INVALID_ID )
+			{
+				locator.bindSearchBase( locator.searchbase_id(), "DigitalIOMeasurementControl" );
+				m_hRoot = locator.searchbase_id();
+				locator.bindComponent( digitalIOMeasurementMode, "DigitalIOMeasurementMode" );
+				locator.bindComponent( digitalIOMeasurementSource, "DigitalIOMeasurementSource" );
+				locator.bindComponent( digitalIOMeasurementResult, "DigitalIOMeasurementResult" );
+			}
+		}
+		PYTHON_ONLY(%immutable;)
+		/// \brief An enumerated integer property defining the type of measurement to perform.
+		///
+		/// Valid values for this property are defined by the enumeration <b>mvIMPACT::acquire::TDigitalIOMeasurementMode</b>.
+		PropertyIDigitalIOMeasurementMode digitalIOMeasurementMode;
+		/// \brief An enumerated integer property defining where the measurement shall be performed.
+		///
+		/// Valid values for this property are defined by the enumeration <b>mvIMPACT::acquire::TDigitalIOMeasurementMode</b>.
+		PropertyIDigitalIOMeasurementSource digitalIOMeasurementSource;
+		/// \brief A float property that will contain the result of the measurement.
+		///
+		/// Reading this property will automatically perform a new measurement.
+		///
+		/// \note
+		/// Please note that the signal connected to the digital input must match the selected digital input
+		/// threshold(see <b>mvIMPACT::acquire::IOSubSystemBlueFOX::digitalInputThreshold</b>) in order to
+		/// obtain valid results.
+		PropertyF digitalIOMeasurementResult;
+		PYTHON_ONLY(%mutable;)
+	#ifdef DOTNET_ONLY_CODE
+		PropertyIDigitalIOMeasurementMode getDigitalIOMeasurementMode( void ) const { return digitalIOMeasurementMode; }
+		PropertyIDigitalIOMeasurementSource getDigitalIOMeasurementSource( void ) const { return digitalIOMeasurementSource; }
+		PropertyF getDigitalIOMeasurementResult( void ) const { return digitalIOMeasurementResult; }
+	#endif // #ifdef DOTNET_ONLY_CODE
+	};
+#endif // #ifndef IGNORE_MVBLUEFOX_SPECIFIC_DOCUMENTATION
 
 //-----------------------------------------------------------------------------
 /// \brief Base class for image processing related properties.
@@ -15121,6 +15479,15 @@ class ImageProcessing : public ComponentCollection
 			locator.bindComponent( channelSplitMode, "ChannelSplitMode" );
 			locator.bindComponent( channelSplitChannelIndex, "ChannelSplitChannelIndex" );
 		}
+		locator.bindSearchBase( m_hRoot );
+		if( locator.findComponent( "ColorTwist" ) != INVALID_ID )
+		{
+			locator.bindSearchBase( m_hRoot, "ColorTwist" );
+			locator.bindComponent( colorTwistEnable, "ColorTwistEnable" );
+			locator.bindComponent( colorTwistRow0, "ColorTwistRow0" );
+			locator.bindComponent( colorTwistRow1, "ColorTwistRow1" );
+			locator.bindComponent( colorTwistRow2, "ColorTwistRow2" );
+		}
 	}
 	//-----------------------------------------------------------------------------
 	void dealloc( void )
@@ -15151,7 +15518,8 @@ public:
 								  gainOffsetKneeEnable(), gainOffsetKneeMasterOffset_pc(),
 								  LUTEnable(), LUTMode(), LUTInterpolationMode(),
 								  LUTImplementation(), LUTMappingHardware(), LUTMappingSoftware(),
-								  tapSortEnable(), channelSplitEnable(), channelSplitMode(), channelSplitChannelIndex()
+								  tapSortEnable(), channelSplitEnable(), channelSplitMode(), channelSplitChannelIndex(),
+								  colorTwistEnable(), colorTwistRow0(), colorTwistRow1(), colorTwistRow2()
 	{
 		DeviceComponentLocator locator(pDev, dltSetting, settingName);
 		m_pRefData = new ReferenceCountedData(pDev->hDrv(), locator.searchbase_id());
@@ -15245,7 +15613,8 @@ public:
 								  LUTEnable(src.LUTEnable), LUTMode(src.LUTMode), LUTInterpolationMode(src.LUTInterpolationMode),
 								  LUTImplementation(src.LUTImplementation), LUTMappingHardware(src.LUTMappingHardware), LUTMappingSoftware(src.LUTMappingSoftware),
 								  tapSortEnable(src.tapSortEnable), channelSplitEnable(src.channelSplitEnable), channelSplitMode(src.channelSplitMode),
-								  channelSplitChannelIndex(src.channelSplitChannelIndex)
+								  channelSplitChannelIndex(src.channelSplitChannelIndex), colorTwistEnable(src.colorTwistEnable),
+								  colorTwistRow0(src.colorTwistRow0), colorTwistRow1(src.colorTwistRow1), colorTwistRow2(src.colorTwistRow2)
 	{
 		++(m_pRefData->m_refCnt);
 	}
@@ -15427,6 +15796,28 @@ public:
 	/// This property will only be visible if <b>mvIMPACT::acquire::ImageProcessing::channelSplitMode</b> is set
 	/// to <b>mvIMPACT::acquire::csmExtractSingle</b>.
 	PropertyI channelSplitChannelIndex;
+	/// \brief An enumerated integer property which can be used to enable/disable the color twist filter.
+	///
+	/// Valid values for this property are defined by the enumeration <b>mvIMPACT::acquire::TBoolean</b>.
+	///
+	/// The color twist filter can be used to apply a linear transformation to a 3 channel image. Each pixel will first
+	/// be multiplied by a 3x3 matrix and can then be added to an offset triplet.
+	PropertyIBoolean colorTwistEnable;
+	/// \brief the first row of the color twist matrix.
+	///
+	/// This property will store 4 values. The first 3 component for the first row of the 3x3 matrix, the last component is the
+	/// offset of this row.
+	PropertyF colorTwistRow0;
+	/// \brief the second row of the color twist matrix.
+	///
+	/// This property will store 4 values. The first 3 component for the second row of the 3x3 matrix, the last component is the
+	/// offset of this row.
+	PropertyF colorTwistRow1;
+	/// \brief the third row of the color twist matrix.
+	///
+	/// This property will store 4 values. The first 3 component for the third row of the 3x3 matrix, the last component is the
+	/// offset of this row.
+	PropertyF colorTwistRow2;
 	PYTHON_ONLY(%mutable;)
 #ifdef DOTNET_ONLY_CODE
 	PropertyIColorProcessingMode getColorProcessing( void ) const { return colorProcessing; }
@@ -15455,7 +15846,46 @@ public:
 	PropertyIBoolean getChannelSplitEnable( void ) const { return channelSplitEnable; }
 	PropertyIChannelSplitMode getChannelSplitMode( void ) const { return channelSplitMode; }
 	PropertyI getChannelSplitChannelIndex( void ) const { return channelSplitChannelIndex; }
+	PropertyIBoolean getColorTwistEnable( void ) const { return colorTwistEnable; }
+	PropertyF getColorTwistRow0( void ) const { return colorTwistRow0; }
+	PropertyF getColorTwistRow1( void ) const { return colorTwistRow1; }
+	PropertyF getColorTwistRow2( void ) const { return colorTwistRow2; }
 #endif // #ifdef DOTNET_ONLY_CODE
+	/// \brief Sets the saturation by using the color twist matrix.
+	///
+	/// The following saturation formula is used:
+	///
+	///\code
+	///  [0.299 + 0.701*K       , 0.587*(1-K) , 0.114*(1-K)     ]
+	///  [0.299*(1-K) + 0.701*K , 0.587       , 0.114*(1-K)     ]
+	///  [0.299*(1-K) + 0.701*K , 0.587*(1-K) , 0.114 + 0.886*K ]
+	///\endcode
+	///
+	/// K is the saturation factor
+	/// K > 1 increases saturation
+	/// K = 1 means no change
+	/// 0 < K < 1 decreases saturation
+	/// K = 0 produces B&W
+	/// K < 0 inverts color
+	///
+	/// \note
+	/// To enable/disable the saturation the application must write to <b>mvIMPACT::acquire::ImageProcessing::colorTwistEnable</b>.
+	void setSaturation( double K )
+	{
+		std::vector<double> row(3, 0.);
+		row[0] = 0.299       + 0.701*K;
+		row[1] = 0.587*(1-K);
+		row[2] = 0.114*(1-K);
+		colorTwistRow0.write( row );
+		row[0] = 0.299*(1-K);
+		row[1] = 0.587       + 0.413*K;
+		row[2] = 0.114*(1-K);
+		colorTwistRow1.write( row );
+		row[0] = 0.299*(1-K);
+		row[1] = 0.587*(1-K);
+		row[2] = 0.114       + 0.886*K;
+		colorTwistRow2.write( row );
+	}
 	/// \brief Returns a reference to a set of user definable parameters to configure a certain channel of the GainOffsetKnee filter.
 	///
 	///\xmlonly
@@ -15823,9 +16253,17 @@ public:
 	/// Each request object can be used to capture data into. Multiple requests can be processed
 	/// by a device driver as background tasks.
 	///
-	/// \note for performance reasons this value can be increased at any time but can only be decreased
-	/// when no request object is currently locked by the application and no requests has been
+	/// \note for performance reasons this value can be increased at any time(only exception: Working with the interface layout
+	/// <b>mvIMPACT::acquire::dilGenICam</b> or <b>mvIMPACT::acquire::dilGeneric</b> while streaming is active) but can only be
+	/// decreased when no request object is currently locked by the application and no requests has been
 	/// queued for acquisition.
+	///
+	/// There are not too many could reasons to modify the default request count suggested by the device driver. Good reasons include:
+	///
+	/// - a single image is huge compared to the overall system memory(e.g. a single image has 200MB while the system itself only
+	/// has about 2GB of RAM. Here it might make sense to reduce the number of capture buffers to 1 or 2.
+	/// - the frame rate is high(larger then 100 frames per second) and no frames shall be lost. Here it might make sense to set
+	/// the number of capture buffers to something like framerate divided by 10 as a rule of thumb.
 	///
 	/// \sa
 	/// <b>mvIMPACT::acquire::FunctionInterface::requestCount</b>
@@ -15881,13 +16319,14 @@ public:
 	public:
 		/// \brief Constructs a new <b>mvIMPACT::acquire::SystemBlueFOX</b> object.
 		explicit SystemBlueFOX(	/// A pointer to a <b>mvIMPACT::acquire::Device</b> object obtained from a <b>mvIMPACT::acquire::DeviceManager</b> object.
-									Device* pDev ) : SystemBase(pDev), transferSize(), footerMode(), powerMode()
+									Device* pDev ) : SystemBase(pDev), transferSize(), footerMode(), footerCheckEnable(), powerMode()
 		{
 			DeviceComponentLocator locator(pDev, dltSystemSettings);
 			locator.bindComponent( powerMode, "PowerMode" );
 			locator.bindSearchBase( locator.searchbase_id(), "Camera" );
 			locator.bindComponent( transferSize, "TransferSize" );
 			locator.bindComponent( footerMode, "FooterMode" );
+			locator.bindComponent( footerCheckEnable, "FooterCheckEnable" );
 		}
 		PYTHON_ONLY(%immutable;)
 		/// \brief An enumerated integer property defining the block size of the
@@ -15900,6 +16339,14 @@ public:
 		///
 		/// Valid values for this property are defined by the enumeration <b>mvIMPACT::acquire::TBlueFOXFooterMode</b>.
 		PropertyIBlueFOXFooterMode footerMode;
+		/// \brief An enumerated integer property allowing to switch on/off the check of the image footer.
+		///
+		/// The image footer contains certain additional data as e.g. the exposure time as used by the image
+		/// sensor. To debug transfer related problems it sometimes can be useful to disable all internal
+		/// data consistency checks by the driver.
+		///
+		/// Valid values for this property are defined by the enumeration <b>mvIMPACT::acquire::TBoolean</b>.
+		PropertyIBoolean footerCheckEnable;
 		/// \brief An enumerated integer property defining the power mode of the
 		/// device.
 		///
@@ -15920,6 +16367,7 @@ public:
 		PropertyIBlueFOXTransferSize getTransferSize( void ) const { return transferSize; }
 		PropertyIBlueFOXFooterMode getFooterMode( void ) const { return footerMode; }
 		PropertyIDevicePowerMode getPowerMode( void ) const { return powerMode; }
+		PropertyIBoolean getFooterCheckEnable( void ) const { return footerCheckEnable; }
 	#endif // #ifdef DOTNET_ONLY_CODE
 	};
 #endif // #ifndef IGNORE_MVBLUEFOX_SPECIFIC_DOCUMENTATION
@@ -16152,7 +16600,7 @@ public:
 #	ifdef _WIN32
 #		ifdef __BORLANDC__
 #			pragma option pop
-#		endif
+#		endif // #ifdef __BORLANDC__
 #	endif // _WIN32
 #endif // !defined(DOXYGEN_SHOULD_SKIP_THIS) && !defined(WRAP_ANY)
 

@@ -103,8 +103,8 @@ static void mavlink_handler(const lcm_recv_buf_t *rbuf, const char * channel,
 
 	if (verbose)
 	{
-		printf("(SYS: %d/COMP: %d/LCM->UDP) Received message from LCM with %i payload bytes and %i total length\n",
-				msg->sysid, msg->compid, msg->len, messageLength);
+		printf("(SYS: %d/COMP: %d/LCM->UDP) Received message with ID %u from LCM with %i payload bytes and %i total length\n",
+				msg->sysid, msg->compid, msg->msgid, msg->len, messageLength);
 		for (int i = 0; i < messageLength; i++)
 		{
 			fprintf(stderr, "%02x ", buf[i]);
@@ -169,8 +169,8 @@ void* udp_wait(void* lcm_ptr)
 				if (verbose)
 				{
 					// Packet received
-					printf("\n(SYS: %d/COMP: %d/UDP) Received message from UDP with %i payload bytes and %i total length\n",
-							msg.sysid, msg.compid, msg.len, recsize);
+					printf("\n(SYS: %d/COMP: %d/UDP) Received message with ID %u from UDP with %i payload bytes and %i total length\n",
+							msg.sysid, msg.compid, msg.msgid, msg.len, recsize);
 				}
 				sendMAVLinkMessage(lcm, &msg);
 			}

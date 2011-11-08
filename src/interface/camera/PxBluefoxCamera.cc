@@ -144,7 +144,7 @@ PxBluefoxCamera::start(void)
 	gettimeofday(&tv, NULL);
 	double startTime = tv.tv_sec + static_cast<double>(tv.tv_usec) / 1000000.0;
 	double currentTime = startTime;
-	double timeout = 5.0;
+	double timeout = 0.5;
 
 	while (!imageAvailable && currentTime - startTime < timeout)
 	{

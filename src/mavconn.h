@@ -160,6 +160,7 @@ sendMAVLinkMessage(lcm_t * lcm, const mavlink_message_t* msg, MAVCONN_LINK_TYPE 
 {
 	// Pack a new container
 	static mavconn_mavlink_msg_container_t container;
+	container.link_component_id = 0;
 	container.link_network_source = link_type;
 	memcpy(&(container.msg), msg, MAVLINK_MAX_PACKET_LEN);
 

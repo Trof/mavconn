@@ -56,7 +56,7 @@
 #endif
 
 #if !defined(MVIMPACT_DEPRECATED_C) && !defined(DOXYGEN_SHOULD_SKIP_THIS)
-#	ifndef MVIMPACT_ACQUIRE_H_
+#	if !defined(MVIMPACT_ACQUIRE_H_) && !defined(NO_MVIMPACT_DEPRECATED_C_WARNINGS)
 #		if defined(__GNUC__) && (__GNUC__ >= 3) && defined(__GNUC_MINOR__) && (__GNUC_MINOR__ >= 1) // is at least GCC 3.1 compiler?
 #			define MVIMPACT_DEPRECATED_C(FUNCTION) FUNCTION __attribute__ ((deprecated))
 #		elif defined(_MSC_VER) && (_MSC_VER >= 1300) // is at least VC 2003 compiler?
@@ -66,7 +66,7 @@
 #		endif // compiler check
 #	else
 #		define MVIMPACT_DEPRECATED_C(FUNCTION) FUNCTION
-#	endif // #ifndef MVIMPACT_ACQUIRE_H_
+#	endif // #if !defined(MVIMPACT_ACQUIRE_H_) && !defined(NO_MVIMPACT_DEPRECATED_C_WARNINGS)
 #endif // #if !defined(MVIMPACT_DEPRECATED_C) && !defined(DOXYGEN_SHOULD_SKIP_THIS)
 
 //-----------------------------------------------------------------------------
@@ -449,9 +449,10 @@ typedef int HOBJ;
 		/// the method object.
 		///
 		/// The characters have the following meaning:
-		/// - i specifies an integer value
+		/// - i specifies a 32-bit integer value
+		/// - I specifies a 64-bit integer value
 		/// - s specifies a pointer to a C-string
-		/// - f specifies a float value
+		/// - f specifies a double precision float value
 		/// - v specifies a void return value
 		///
 		/// Examples:
@@ -706,7 +707,7 @@ typedef int HOBJ;
 									/// Whenever the callback gets executed this data is passed back to the user.
 									void* pUserData );
 	//-----------------------------------------------------------------------------
-	TPROPHANDLING_ERROR DMR_CALL OBJ_CreateCallback( TCallbackType type, void* pMeth, void* pUserData, CallbackHandle* phCallback );
+	TPROPHANDLING_ERROR DMR_CALL OBJ_CreateCallback( TCallbackType type, CBOBJChanged pMeth, void* pUserData, CallbackHandle* phCallback );
 	TPROPHANDLING_ERROR DMR_CALL OBJ_DeleteCallback( CallbackHandle hCallback );
 	TPROPHANDLING_ERROR DMR_CALL OBJ_AttachCallback( HOBJ hObj, CallbackHandle hCallback );
 	TPROPHANDLING_ERROR DMR_CALL OBJ_DetachCallback( HOBJ hObj, CallbackHandle hCallback );

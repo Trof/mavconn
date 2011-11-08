@@ -54,8 +54,8 @@ SET_SOURCE_FILES(CAMERA_SRC_FILES
   PxFireflyCamera.cc
   PxFireflyCameraManager.cc
   PxFireflyStereoCamera.cc
-  PxOpenCVCamera.cc
-  PxOpenCVCameraManager.cc
+#  PxOpenCVCamera.cc
+#  PxOpenCVCameraManager.cc
   PxStereoCamera.cc
 )
 
@@ -76,7 +76,7 @@ PIXHAWK_LINK_LIBRARIES(mavconn_cam
   ${DC_LIBRARY_OPTIMIZED}
   ${GLIBMM2_LIBRARY}
   ${OPENCV_CORE_LIBRARY}
-  ${OPENCV_HIGHGUI_LIBRARY}
+#  ${OPENCV_HIGHGUI_LIBRARY}
   ${SIGC++_LIBRARY}
   lcm
   mavconn_lcm

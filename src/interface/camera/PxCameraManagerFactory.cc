@@ -4,11 +4,11 @@
 #include "PxBluefoxCameraManager.h"
 #endif
 #include "PxFireflyCameraManager.h"
-#include "PxOpenCVCameraManager.h"
+//#include "PxOpenCVCameraManager.h"
 
 PxCameraManagerPtr PxCameraManagerFactory::bluefoxCameraManager;
 PxCameraManagerPtr PxCameraManagerFactory::fireflyCameraManager;
-PxCameraManagerPtr PxCameraManagerFactory::opencvCameraManager;
+//PxCameraManagerPtr PxCameraManagerFactory::opencvCameraManager;
 
 PxCameraManagerPtr
 PxCameraManagerFactory::generate(const std::string& type)
@@ -37,14 +37,14 @@ PxCameraManagerFactory::generate(const std::string& type)
 		}
 		return fireflyCameraManager;
 	}
-	else if (type.compare("opencv") == 0)
-		{
-			if (opencvCameraManager.get() == 0)
-			{
-				opencvCameraManager = PxCameraManagerPtr(new PxOpenCVCameraManager);
-			}
-			return opencvCameraManager;
-		}
+//	else if (type.compare("opencv") == 0)
+//		{
+//			if (opencvCameraManager.get() == 0)
+//			{
+//				opencvCameraManager = PxCameraManagerPtr(new PxOpenCVCameraManager);
+//			}
+//			return opencvCameraManager;
+//		}
 	else
 	{
 		return PxCameraManagerPtr();
