@@ -80,6 +80,8 @@ std::vector<mavlink_mission_item_t*>* waypoints = &waypoints1;					///< pointer 
 std::vector<mavlink_mission_item_t*>* waypoints_receive_buffer = &waypoints2;	///< pointer to the receive buffer waypoint vector
 
 //==== variables for the search thread ====
+std::vector<std::string> _image_list;
+std::vector<std::string>* image_list = &_image_list;
 mavlink_local_position_ned_t search_success_pos; ///< position of MAV when it succeeded in search
 mavlink_attitude_t search_success_att;		 ///< attitude of MAV when it succeeded in search
 mavlink_pattern_detected_t last_detected_pattern; ///< latest successful pattern detection
@@ -1547,12 +1549,11 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 			{
 				mavlink_pattern_detected_t pd;
 				mavlink_msg_pattern_detected_decode(msg, &pd);
-				//printf("Pattern - conf: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
-
+				if (debug) printf("Pattern - conf: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
+				std::string SEARCH_PIC = image_list->at(0);
 				if (search_state != PX_WPP_SEARCH_IDLE)
 				{
-					GString* SEARCH_PIC = g_string_new("./media/sweep_images/mona.jpg");
-					if(pd.detected==1 && strcmp((char*)pd.file,SEARCH_PIC->str) == 0 && pd.confidence >= min_conf)
+					if(pd.detected==1 && strcmp((char*)pd.file,SEARCH_PIC.c_str()) == 0 && pd.confidence >= min_conf)
 					{
 						last_detected_pattern = pd;
 						if(verbose) printf("Found it! - confidence: %f, detect: %i, file: %s, type: %i\n",pd.confidence,pd.detected,pd.file,pd.type);
@@ -1699,6 +1700,7 @@ int main(int argc, char* argv[])
 */
 {
 	std::string waypointfile;
+	std::string imagelistfile;
     config::options_description desc("Allowed options");
     desc.add_options()
             ("help", "produce help message")
@@ -1706,6 +1708,7 @@ int main(int argc, char* argv[])
             ("verbose,v", config::bool_switch(&verbose)->default_value(false), "verbose output")
             ("config", config::value<std::string>(&configFile)->default_value("config/parameters_missionplanner.cfg"), "Config file for system parameters")
             ("waypointfile", config::value<std::string>(&waypointfile)->default_value(""), "Config file for waypoint")
+	    ("imagelistfile", config::value<std::string>(&imagelistfile)->default_value(""), "List of paths of images, which are used for search")
             ;
     config::variables_map vm;
     config::store(config::parse_command_line(argc, argv, desc), vm);
@@ -1751,6 +1754,51 @@ int main(int argc, char* argv[])
     paramClient->setParamValue("YAWTOLERANCE", 0.1745f);
     paramClient->readParamsFromFile(configFile);
 
+    /**********************************
+    * Read list of images
+    **********************************/
+
+    if (imagelistfile.length())
+    {
+        std::ifstream ilfile;
+        ilfile.open(imagelistfile.c_str());
+        if (!ilfile) {
+            printf("Unable to open image list file\n");
+            exit(1); // terminate with error
+        }
+
+        if (!ilfile.eof())
+        {
+            printf("Loading image list file...\n");
+            std::string image_path;
+            while (!ilfile.eof())
+            {
+            	getline(ilfile,image_path);
+            	if (image_path.size() > 0)
+            	{
+            		printf("%s\n", image_path.c_str());
+            		image_list->push_back(image_path);
+            	}
+            	else
+            	{
+            		break;
+            	}
+            }
+        }
+        else
+        {
+            printf("Empty image list file!\n");
+        }
+        ilfile.close();
+        //Test if filenames have been saved correctly
+        printf("%u\n", image_list->size());
+        std::string temp;
+        temp = image_list->at(1);
+        printf("%s\n", temp.c_str());
+	}
+
+
+
 
     /**********************************
     * Run the LCM thread
@@ -1784,6 +1832,7 @@ int main(int argc, char* argv[])
 		cond_pattern_detected = g_cond_new();
 		printf("Conditions created\n");
 	}
+
     /**********************************
     * Read waypoints from file and
     * set the new current waypoint
@@ -1869,7 +1918,8 @@ int main(int argc, char* argv[])
         }
         wpfile.close();
 
-        wpp_state = PX_WPP_RUNNING;
+	wpp_state = PX_WPP_RUNNING;
+
         struct timeval tv;
         gettimeofday(&tv, NULL);
         uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
@@ -1895,6 +1945,7 @@ int main(int argc, char* argv[])
     }
     g_mutex_unlock(main_mutex);
 
+    wpp_state = PX_WPP_RUNNING;
     printf("WAYPOINTPLANNER INITIALIZATION DONE, RUNNING...\n");
 
     /**********************************
