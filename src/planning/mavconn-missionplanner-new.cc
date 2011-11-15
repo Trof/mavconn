@@ -592,6 +592,8 @@ for (i=3;i>0;i--)
 }
 
 
+
+
 /*
 // FIX ME!!
 void terminate_all_threads() //this fuction should be called every time when a new waypoint list is downloaded, to end threads from the old list.
@@ -605,8 +607,40 @@ void terminate_all_threads() //this fuction should be called every time when a n
 }
 */
 
+
+void* patternrec_thread_func (gpointer n_det)
+//FIXME: make sure that this thread is terminated properly
+{
+	int ret = 0;
+	if (verbose) printf("Executing px_patternrec...\n");
+	std::string fcn_call = "px_patternrec";
+	std::string before_path = " -i '";
+	std::string after_path = "'";
+	for (uint16_t i = 0; i<image_list->size(); i++)
+	{
+		std::string pic_path;
+		pic_path = image_list->at(i);
+		fcn_call = fcn_call + before_path + pic_path + after_path;
+	}
+	//printf("Trying to execute: %s\n", fcn_call.c_str());
+	ret = system (fcn_call.c_str());
+	if (ret) {
+		if (verbose) std::cerr << "px_patternrec failed." << std::endl;
+		return NULL;
+	}
+}
+
 void* search_thread_func (gpointer n_det)
 {
+	//Start pattern recognition in another thread
+	void* ptr = NULL;
+	if( (search_thread = g_thread_create(patternrec_thread_func, ptr, TRUE, &error)) == NULL)
+	{
+		printf("Patternrec thread creation failed: %s!!\n", error->message );
+		g_error_free ( error ) ;
+	}
+
+	//Manage the output of patternrec
 	uint16_t npic = 0;	                         ///< number of times the picture has been detected
 	float best_conf = 0;
 	search_state = PX_WPP_SEARCH_RUNNING;
@@ -615,8 +649,9 @@ void* search_thread_func (gpointer n_det)
 	if (verbose) printf("here %u.\n", detections_needed);
 	while (1)
 	{
+		if (verbose) printf("here 2\n");
 		g_cond_wait(cond_pattern_detected,main_mutex);
-
+		if (verbose) printf("here 3\n");
 		if (terminate_threads == true || search_state == PX_WPP_SEARCH_END)
 		{
 			search_state = PX_WPP_SEARCH_IDLE;
@@ -1710,7 +1745,7 @@ int main(int argc, char* argv[])
             ("verbose,v", config::bool_switch(&verbose)->default_value(false), "verbose output")
             ("config", config::value<std::string>(&configFile)->default_value("config/parameters_missionplanner.cfg"), "Config file for system parameters")
             ("waypointfile", config::value<std::string>(&waypointfile)->default_value(""), "Config file for waypoint")
-	    ("imagelistfile", config::value<std::string>(&imagelistfile)->default_value(""), "List of paths of images, which are used for search")
+            ("imagelistfile", config::value<std::string>(&imagelistfile)->default_value(""), "List of paths of images, which are used for search")
             ;
     config::variables_map vm;
     config::store(config::parse_command_line(argc, argv, desc), vm);
