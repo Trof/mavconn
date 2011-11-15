@@ -5,10 +5,15 @@ INCLUDE_DIRECTORIES(.
   ${GLIBMM2_INTERNAL_INCLUDE_DIR}
   ${GTHREAD2_MAIN_INCLUDE_DIR}
   ${SIGC++_INCLUDE_DIR}
-  ${DC_INCLUDE_DIR}
-  ${DC_INCLUDE_DIR}/../
   ../../external/mvimpact
 )
+
+IF(DC1394_FOUND)
+INCLUDE_DIRECTORIES(.
+  ${DC_INCLUDE_DIR}
+  ${DC_INCLUDE_DIR}/../
+)
+ENDIF(DC1394_FOUND)
 
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     # Linux specific code
@@ -46,6 +51,7 @@ PIXHAWK_LINK_LIBRARIES(mavconn-replay
   ${Boost_SYSTEM_LIBRARY}
 )
 
+IF(DC1394_FOUND)
 SET_SOURCE_FILES(CAMERA_SRC_FILES
   PxCamera.cc
   PxCameraCapture.cc
@@ -102,6 +108,8 @@ PIXHAWK_LINK_LIBRARIES(mavconn-camera
   ${GTHREAD2_LIBRARY}
   mavconn_cam
 )
+
+ENDIF(DC1394_FOUND)
 
 PIXHAWK_EXECUTABLE(mavconn-view mavconn-view.cc)
 PIXHAWK_LINK_LIBRARIES(mavconn-view

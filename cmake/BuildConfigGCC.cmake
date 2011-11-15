@@ -52,12 +52,36 @@ ENDIF()
 SET_COMPILER_FLAGS("$ENV{CXXFLAGS}" CXX CACHE)
 SET_COMPILER_FLAGS("$ENV{CFLAGS}"   C   CACHE)
 
+# Include supported SSE extensions
+IF(SUPPORTS_SSE41)
+  SET(SSE_FLAGS "-msse4.1 -mfpmath=sse")
+  MESSAGE(STATUS "Found SSE4.1 extensions, using flags: ${SSE_FLAGS}")
+ELSEIF(SUPPORTS_SSE3)
+  SET(SSE_FLAGS "-msse3 -mfpmath=sse")
+  MESSAGE(STATUS "Found SSE3 extensions, using flags: ${SSE_FLAGS}")
+ELSEIF(SUPPORTS_SSE2)
+  SET(SSE_FLAGS "-msse2 -mfpmath=sse")
+  MESSAGE(STATUS "Found SSE2 extensions, using flags: ${SSE_FLAGS}")
+ELSEIF(SUPPORTS_SSE1)
+  SET(SSE_FLAGS "-msse -mfpmath=sse")
+  MESSAGE(STATUS "Found SSE1 extensions, using flags: ${SSE_FLAGS}")
+ENDIF()
+SET_COMPILER_FLAGS("${SSE_FLAGS}" CACHE)
+
 # These flags get added to the flags above
+IF(APPLE)
+SET_COMPILER_FLAGS("    -g -ggdb -D_DEBUG" Debug          CACHE)
+SET_COMPILER_FLAGS("             -DNDEBUG -march=core2" ReleaseAll     CACHE)
+ADD_COMPILER_FLAGS("-O2                   -march=core2" Release        CACHE)
+ADD_COMPILER_FLAGS("-O2 -g -ggdb          -march=core2" RelWithDebInfo CACHE)
+ADD_COMPILER_FLAGS("-Os                   -march=core2" MinSizeRel     CACHE)
+ELSE(APPLE)
 SET_COMPILER_FLAGS("    -g -ggdb -D_DEBUG" Debug          CACHE)
 SET_COMPILER_FLAGS("             -DNDEBUG -march=native" ReleaseAll     CACHE)
-ADD_COMPILER_FLAGS("-O3                   -march=native" Release        CACHE)
+ADD_COMPILER_FLAGS("-O2                   -march=native" Release        CACHE)
 ADD_COMPILER_FLAGS("-O2 -g -ggdb          -march=native" RelWithDebInfo CACHE)
 ADD_COMPILER_FLAGS("-Os                   -march=native" MinSizeRel     CACHE)
+ENDIF(APPLE)
 
 IF (CMAKE_SYSTEM_PROCESSOR STREQUAL "i686" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
 # ADD_COMPILER_FLAGS("-mtune=pentium4 -march=pentium4 -ftree-vectorize -msse2 -ffast-math -fexpensive-optimizations -fomit-frame-pointer -funroll-loops" Release CACHE)
@@ -81,6 +105,9 @@ ADD_COMPILER_FLAGS("-Wno-sign-compare" GCC_NO_SYSTEM_HEADER_SUPPORT CACHE)
 # For newer GCC (4.3 and above), don't display hundreds of annoying deprecated
 # messages. Other versions don't seem to show any such warnings at all.
 ADD_COMPILER_FLAGS("-Wno-deprecated" CXX CACHE)
+
+# avoid g++ internal errors which often occur with a high number of inlines
+ADD_COMPILER_FLAGS("-finline-limit=400" CXX CACHE)
 
 COMPARE_VERSION_STRINGS("${GCC_VERSION}" "4.2.9" _compare_result)
 IF(_compare_result GREATER 0)

@@ -4,6 +4,7 @@ INCLUDE(HandleLibraryTypes)
 SET(GLIBTOP_IncludeSearchPaths
   /usr/include/
   /usr/include/libgtop-2.0/
+  /usr/local/include/libgtop-2.0/
   /opt/local/include/libgtop-2.0/
 )
 
@@ -17,7 +18,7 @@ FIND_PATH(GLIBTOP_INCLUDE_DIR
   PATHS ${GLIBTOP_IncludeSearchPaths}
 )
 FIND_LIBRARY(GLIBTOP_LIBRARY_OPTIMIZED
-  NAMES gtop gtop-2.0 gtop-2.1 gtop-2.2 gtop-2.3 gtop-2.4 gtop-2.5 gtop-2.6 gtop-2.7 gtop-2.8 gtop-2.9 gtop-3.0
+  NAMES gtop gtop-2.0 gtop-2.1 gtop-2.2 gtop-2.3 gtop-2.4 gtop-2.5 gtop-2.6 gtop-2.7 gtop-2.8 gtop-2.9 gtop-3.0 libgtop-2.0 libgtop-2.1 libgtop-2.2 libgtop-2.3 libgtop-2.4
   PATHS ${GLIBTOP_LibrarySearchPaths}
 )
 
