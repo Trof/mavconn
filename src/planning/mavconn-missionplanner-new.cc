@@ -807,7 +807,7 @@ void* sweep_thread_func (gpointer sweep_wp)
 		next_sweep_wp->command = MAV_CMD_NAV_WAYPOINT; // Must be declared
 		next_sweep_wp->frame = 1;
 		next_sweep_wp->param1 = 0.15; // acceptance radius may depend on sw.r, e.g. 0.2*sw.r
-		next_sweep_wp->param2 = 0.5; // MAV should stay 0.5s at each checkpoint within the sweep
+		next_sweep_wp->param2 = 2; // MAV should stay 0.5s at each checkpoint within the sweep
 		next_sweep_wp->param4 = 0; // Should yaw stay constant all the time?
 		next_sweep_wp->z = sw.z;
 
