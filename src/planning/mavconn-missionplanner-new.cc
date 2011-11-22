@@ -80,6 +80,8 @@ std::vector<mavlink_mission_item_t*>* waypoints = &waypoints1;					///< pointer 
 std::vector<mavlink_mission_item_t*>* waypoints_receive_buffer = &waypoints2;	///< pointer to the receive buffer waypoint vector
 
 //==== variables for the search thread ====
+pid_t patternrec_pid = -1; ///< process id of patternrec. -1 until initialized by fork()
+
 std::vector<std::string> _image_list;
 std::vector<std::string>* image_list = &_image_list;
 mavlink_local_position_ned_t search_success_pos; ///< position of MAV when it succeeded in search
@@ -607,39 +609,8 @@ void terminate_all_threads() //this fuction should be called every time when a n
 }
 */
 
-
-void* patternrec_thread_func (gpointer n_det)
-//FIXME: make sure that this thread is terminated properly
-{
-	int ret = 0;
-	if (verbose) printf("Executing px_patternrec...\n");
-	std::string fcn_call = "px_patternrec";
-	std::string before_path = " -i '";
-	std::string after_path = "'";
-	for (uint16_t i = 0; i<image_list->size(); i++)
-	{
-		std::string pic_path;
-		pic_path = image_list->at(i);
-		fcn_call = fcn_call + before_path + pic_path + after_path;
-	}
-	//printf("Trying to execute: %s\n", fcn_call.c_str());
-	ret = system (fcn_call.c_str());
-	if (ret) {
-		if (verbose) std::cerr << "px_patternrec failed." << std::endl;
-		return NULL;
-	}
-}
-
 void* search_thread_func (gpointer n_det)
 {
-	//Start pattern recognition in another thread
-	void* ptr = NULL;
-	if( (search_thread = g_thread_create(patternrec_thread_func, ptr, TRUE, &error)) == NULL)
-	{
-		printf("Patternrec thread creation failed: %s!!\n", error->message );
-		g_error_free ( error ) ;
-	}
-
 	//Manage the output of patternrec
 	uint16_t npic = 0;	                         ///< number of times the picture has been detected
 	float best_conf = 0;
@@ -1018,6 +989,55 @@ void handle_mission (uint16_t seq, uint64_t now)
 	    	min_conf = cur_wp->param1; // setting minimal confidence
 	    	if (search_state == PX_WPP_SEARCH_IDLE)
 	    	{
+	    		//Start pattern recognition in a fork
+	    		if (patternrec_pid == -1) //means that no patternrec is running yet
+	    		{
+	    			patternrec_pid = fork();
+
+	    			if (patternrec_pid == 0)                // child
+	    			{
+	    				if (verbose) printf("Executing px_patternrec...\n");
+	    				std::string fcn_call = "px_patternrec";
+	    				std::string before_path = " -i '";
+	    				std::string after_path = "'";
+	    				std::string fcn_param = "-v";
+	    				for (uint16_t i = 0; i<image_list->size(); i++)
+	    				{
+	    					std::string pic_path;
+	    					pic_path = image_list->at(i);
+	    					fcn_param = fcn_param + before_path + pic_path + after_path;
+	    				}
+	    				printf("Trying to execute: %s %s\n", fcn_call.c_str(),fcn_param.c_str());
+
+	    		        char* argv[fcn_param.size() + 1]; // +1 for the trailing 0
+	    		        for (unsigned int i = 0; i < fcn_param.size(); ++i)
+	    		            argv[i] = const_cast<char*>(&fcn_param.at(i));
+	    		        argv[fcn_param.size()] = 0;
+
+	    		        if (execvp("px_patternrec",argv))
+	    				{
+	    					if (verbose) std::cerr << "px_patternrec failed." << std::endl;
+	    					return;
+	    				}
+	    	            // We shoulnd't ever reach this line. If we do, exit.
+	    	            _exit(EXIT_FAILURE);
+	    			}
+	    			else if (patternrec_pid < 0)            // failed to fork
+	    			{
+	    				std::cerr << "Failed to fork" << std::endl;
+	    		        exit(1);
+	    			}
+	    			else //parent
+	    			{
+	    				usleep(500000); // give some time to patternrec to initialize
+	    			}
+
+	    		}
+	    		else
+	    		{
+	    			//Kill old patternrec and start a new one, if necessary
+	    		}
+
 		    	if( !g_thread_supported() )
 		    	{
 		    		g_thread_init(NULL); // Only initialize g thread if not already done
