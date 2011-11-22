@@ -31,13 +31,10 @@
  *
  */
 #include <iostream>
-/* BOOST includes */
-#include <boost/program_options.hpp>
+#include <glib.h>
 #include "mavconn.h"
 
 lcm_t * lcm; ///< LCM interprocess reference
-
-namespace config = boost::program_options;
 
 void send_reset(void) {
 	char param[15] = "SYS_IMU_RESET";//{'I','M','U','_','R','E','S','E','T'};
@@ -56,27 +53,23 @@ void send_reset(void) {
 int main(int argc, char* argv[]) {
 	// Handling Program options
 
-	int reset;
-	config::options_description desc("Allowed options");
-	desc.add_options()("help", "produce help message")(
-			"reset,r",
-			config::value<int>(&reset)->default_value(0), "RESET IMU")
-	//									("serial,s", config::value<uint64_t>(&cam_id)->default_value(0), "Serial # of the camera to select")
-	//									("capture-index,c", config::value<int>(&capture_index)->default_value(0), "Capture index. 0 to auto-select")
-	//									("exposure,e", config::value<uint32_t>(&exposure)->default_value(2000), "Exposure in microseconds")
-	//									("gain,g", config::value<uint32_t>(&gain)->default_value(120), "Gain in FIXME")
-	//									("trigger,t", config::bool_switch(&trigger)->default_value(false), "Enable hardware trigger (Firefly MV: INPUT: GPIO0, OUTPUT: GPIO2)")
-	//									("silent,s", config::bool_switch(&silent)->default_value(false), "Surpress outputs")
-	//									("verbose,v", config::bool_switch(&verbose)->default_value(false), "Verbose output")
-	//									("debug,d", config::bool_switch(&debug)->default_value(false), "Debug output")
-	;
-	config::variables_map vm;
-	config::store(config::parse_command_line(argc, argv, desc), vm);
-	config::notify(vm);
+	bool reset = false;
+	// Handling Program options
+	static GOptionEntry entries[] =
+	{
+			{ "reset", 'r', 0, G_OPTION_ARG_NONE, &reset, "Reset board", NULL },
+			{ NULL }
+	};
 
-	if (vm.count("help")) {
-		std::cout << desc << std::endl;
-		return 1;
+	GError *error = NULL;
+	GOptionContext *context;
+
+	context = g_option_context_new ("- send a notification to the system");
+	g_option_context_add_main_entries (context, entries, NULL);
+	if (!g_option_context_parse (context, &argc, &argv, &error))
+	{
+		printf("Option parsing failed: %s\n", error->message);
+		exit (1);
 	}
 
 	lcm = lcm_create("udpm://");
@@ -84,9 +77,9 @@ int main(int argc, char* argv[]) {
 		printf("\nCouldn't start LCM link, aborting\n");
 		return 1;
 	}
-	if (vm.count("reset") || vm.count("r")) {
+	if (reset) {
 
-		if (reset == 1) {
+		if (reset) {
 			send_reset();
 			printf("\nRESET IMU\n");
 		} else {

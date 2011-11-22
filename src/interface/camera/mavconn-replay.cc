@@ -107,6 +107,12 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 
+		// Try to guess if only option is the filename
+		if (argc == 2)
+		{
+			logfile = std::string(argv[1]);
+		}
+
 		camid_left = idleft;
 		camid_right = idright;
 		uint64_t startTimestamp = strtoul(fromTimestampString.c_str(), NULL, 0);
@@ -114,7 +120,7 @@ int main(int argc, char* argv[])
 	mavlinkLog.open(logfile.c_str(), std::ios::binary | std::ios::in);
 	if (!mavlinkLog)
 	{
-		printf("Error opening MAVLINK log file: %s\n", logfile.c_str());
+		printf("mavconn-replay: Error opening MAVLINK log file: %s\n", logfile.c_str());
 		return EXIT_FAILURE;
 	}
 
@@ -122,13 +128,13 @@ int main(int argc, char* argv[])
 	if(imagepath_left.length() == 0)
 	{
 		imagepath_left = logfile.substr(0, logfile.length()-8) + "/left";
-		printf("Left images stream path not specified, trying %s\n", imagepath_left.c_str());
+		printf("mavconn-replay: Left images stream path not specified, trying %s\n", imagepath_left.c_str());
 	}
 
 	if(imagepath_right.length() == 0)
 	{
 		imagepath_right = logfile.substr(0, logfile.length()-8) + "/right";
-		printf("Right images stream path not specified, trying %s\n", imagepath_right.c_str());
+		printf("mavconn-replay: Right images stream path not specified, trying %s\n", imagepath_right.c_str());
 	}
 
 	// ----- Setting up communication and data for images
@@ -158,7 +164,7 @@ int main(int argc, char* argv[])
 		//mavconn_mavlink_msg_container_t_subscription_t * img_sub  = mavlink_message_t_subscribe (lcmImage, MAVLINK_IMAGES, &image_handler, cam);
 		//mavconn_mavlink_msg_container_t_subscription_t * comm_sub = mavlink_message_t_subscribe (lcmMavlink, MAVLINK_MAIN, &mavlink_handler, lcmMavlink);
 
-		printf("px_replay: Found left camera image stream, loading image list...\n");
+		printf("mavconn-replay: Found left camera image stream, loading image list...\n");
 
 		if (imagepath_left.size() > 0 && imagepath_left[imagepath_left.size() - 1] != '/')
 			imagepath_left += '/';
@@ -190,7 +196,7 @@ int main(int argc, char* argv[])
 		//check for right images
 		if (bfs::exists(ipath_right) && bfs::is_directory(ipath_right))
 		{
-			printf("px_replay: Found right camera image stream, loading image list...\n");
+			printf("mavconn-replay: Found right camera image stream, loading image list...\n");
 
 			do_stereo = true;
 
@@ -225,7 +231,7 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		printf("px_replay: No images available\n");
+		printf("mavconn-replay: No images available\n");
 	}
 
 	if (do_stereo)
@@ -233,10 +239,12 @@ int main(int argc, char* argv[])
 		if (orientation == "forward")
 		{
 			cam.init(sysid, compid, lcmImage, PxSHM::CAMERA_FORWARD_LEFT, PxSHM::CAMERA_FORWARD_RIGHT);
+			printf("mavconn-replay: Initializing stereo FRONT camera replay\n");
 		}
 		else
 		{
 			cam.init(sysid, compid, lcmImage, PxSHM::CAMERA_DOWNWARD_LEFT, PxSHM::CAMERA_DOWNWARD_RIGHT);
+			printf("mavconn-replay: Initializing stereo DOWN camera replay\n");
 		}
 	}
 	else
@@ -244,24 +252,27 @@ int main(int argc, char* argv[])
 		if (orientation == "forward")
 		{
 			cam.init(sysid, compid, lcmImage, PxSHM::CAMERA_FORWARD_LEFT);
+			printf("mavconn-replay: Initializing monocular FRONT camera replay\n");
 		}
 		else
 		{
 			cam.init(sysid, compid, lcmImage, PxSHM::CAMERA_DOWNWARD_LEFT);
+			printf("mavconn-replay: Initializing monocular DOWN camera replay\n");
 		}
 	}
 
 
 	const int len = MAVLINK_MAX_PACKET_LEN+sizeof(uint64_t);
-	uint8_t buf[len];
+	unsigned char buf[len];
 	uint64_t last_time = 0;
 	uint64_t time;
 	mavlink_message_t msg;
+	mavlink_status_t status;
 
-	printf("px_replay: Start playing logfile %s...\n", logfile.c_str());
+	printf("mavconn-replay: Start playing logfile %s...\n", logfile.c_str());
 
 	if(startTimestamp > 0)
-		printf("trying to skip to timestamp %lu...\n", startTimestamp);
+		printf("trying to skip to timestamp %llu...\n", startTimestamp);
 
 	GTimeVal gtime;
 	g_get_current_time(&gtime);
@@ -281,8 +292,11 @@ int main(int argc, char* argv[])
 		mavlinkLog.read((char *)buf, len);
 		//first 8 bytes are the timestamp
 		memcpy((void*)&time, buf, sizeof(uint64_t));
-		//the following bytes are the message without magic number (see mavlink_msg_to_send_buffer() for details)
-		memcpy((char *)&msg, (char *)buf+sizeof(uint64_t)+1,MAVLINK_MAX_PACKET_LEN-1);
+		// Quickly parse the message and break at message end
+		for (int i = sizeof(uint64_t); i<MAVLINK_MAX_PACKET_LEN; ++i)
+		{
+			if (mavlink_parse_char(MAVLINK_COMM_0, buf[i], &msg, &status)) break;
+		}
 		//the checksums follow directly after the payload, so copy them to their fields in mavlink_message_t
 		//msg.ck_a = *(sizeof(uint64_t) + buf + msg.len + MAVLINK_CORE_HEADER_LEN + 1);
 		//msg.ck_b = *(sizeof(uint64_t) + buf + msg.len + MAVLINK_CORE_HEADER_LEN + 2);
@@ -332,6 +346,10 @@ int main(int argc, char* argv[])
 					{
 						cam.writeMonoImage(image_left, camid_left, itrg.timestamp, itrg, 0);
 					}
+				}
+				else
+				{
+					printf("ERROR:\tLeft image not found!\n");
 				}
 			}
 		}

@@ -308,6 +308,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
 //		}
 		}
 	}
+	break;
 
 	default:
 		break;

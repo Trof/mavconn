@@ -130,13 +130,18 @@ public:
 			{
 			case MAV_CMD_PREFLIGHT_STORAGE:
 			{
-				if (action.param1)
-				readParamsFromFile(configFileName);
-				if (verbose) printf("Reading parameters from file %s", configFileName.c_str());
-				break;
-				if (verbose) printf("Writing parameters from file %s", configFileName.c_str());
-				writeParamsToFile(configFileName);
-				break;
+				if (action.param1 == 0)
+				{
+					readParamsFromFile(configFileName);
+					if (verbose) printf("Reading parameters from file %s", configFileName.c_str());
+					break;
+				}
+				else if (action.param1 == 1)
+				{
+					if (verbose) printf("Writing parameters from file %s", configFileName.c_str());
+					writeParamsToFile(configFileName);
+					break;
+				}
 			}
 			}
 		}

@@ -101,7 +101,7 @@ imageHandler(const lcm_recv_buf_t* rbuf, const char* channel,
 
 			if (verbose)
 			{
-				fprintf(stderr, "# INFO: Time from capture to display: %lu ms for camera %lu\n", diff / 1000, client.getCameraID(msg));
+				fprintf(stderr, "# INFO: Time from capture to display: %llu ms for camera %llu\n", diff / 1000, client.getCameraID(msg));
 			}
 
 			// Display if switched on

@@ -51,6 +51,14 @@ PIXHAWK_LINK_LIBRARIES(mavconn-replay
   ${Boost_SYSTEM_LIBRARY}
 )
 
+SET_SOURCE_FILES(CAMERA_OPENCV_SRC_FILES
+  PxCamera.cc
+  PxCameraOpenCVManagerFactory.cc
+  PxOpenCVCamera.cc
+  PxOpenCVCameraManager.cc
+  PxStereoCamera.cc
+)
+
 IF(DC1394_FOUND)
 SET_SOURCE_FILES(CAMERA_SRC_FILES
   PxCamera.cc
@@ -110,6 +118,29 @@ PIXHAWK_LINK_LIBRARIES(mavconn-camera
 )
 
 ENDIF(DC1394_FOUND)
+
+PIXHAWK_LIBRARY(mavconn_cam_opencv SHARED ${CAMERA_OPENCV_SRC_FILES})
+PIXHAWK_LINK_LIBRARIES(mavconn_cam_opencv
+  ${GLIBMM2_LIBRARY}
+  ${OPENCV_CORE_LIBRARY}
+  ${OPENCV_HIGHGUI_LIBRARY}
+  ${SIGC++_LIBRARY}
+  lcm
+  mavconn_lcm
+  mavconn_shm
+)
+
+PIXHAWK_EXECUTABLE(mavconn-camera-opencv
+  mavconn-camera-opencv.cc
+)
+PIXHAWK_LINK_LIBRARIES(mavconn-camera-opencv
+  ${Boost_PROGRAM_OPTIONS_LIBRARY}
+  ${Boost_SYSTEM_LIBRARY}
+  ${OPENCV_IMGPROC_LIBRARY}
+  ${GLIB2_LIBRARY}
+  ${GTHREAD2_LIBRARY}
+  mavconn_cam_opencv
+)
 
 PIXHAWK_EXECUTABLE(mavconn-view mavconn-view.cc)
 PIXHAWK_LINK_LIBRARIES(mavconn-view

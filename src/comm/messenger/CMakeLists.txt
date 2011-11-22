@@ -1,6 +1,12 @@
+INCLUDE_DIRECTORIES(.
+  ${GLIB2_MAIN_INCLUDE_DIR}
+  ${GLIB2_INTERNAL_INCLUDE_DIR}
+  ${GTHREAD2_MAIN_INCLUDE_DIR}
+)
 
-PIXHAWK_EXECUTABLE(px_messenger px_messenger.cc)
-PIXHAWK_LINK_LIBRARIES(px_messenger
-   mavconn_lcm
-  ${Boost_PROGRAM_OPTIONS_LIBRARY}
+PIXHAWK_EXECUTABLE(mavconn-messenger mavconn-messenger.cc)
+PIXHAWK_LINK_LIBRARIES(mavconn-messenger
+  mavconn_lcm
+  ${GLIB2_LIBRARY}
+  ${GTHREAD2_LIBRARY}
 )

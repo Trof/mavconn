@@ -124,11 +124,11 @@ PxBluefoxStereoCamera::grabFrame(cv::Mat& imageLeft, cv::Mat& imageRight,
 	}
 	while (imageAvailable != ALL_IMAGES_AVAILABLE);
 
-	if (cameraLeft->imageSequenceNr != cameraRight->imageSequenceNr)
-	{
-		fprintf(stderr, "# ERROR: Left and right image sequence numbers mismatch, grabbing failed.\n");
-		return false;
-	}
+//	if (cameraLeft->imageSequenceNr != cameraRight->imageSequenceNr)
+//	{
+//		fprintf(stderr, "# ERROR: Left and right image sequence numbers mismatch, grabbing failed.\n");
+//		return false;
+//	}
 
 	cameraLeft->image.copyTo(imageLeft);
 	cameraRight->image.copyTo(imageRight);
