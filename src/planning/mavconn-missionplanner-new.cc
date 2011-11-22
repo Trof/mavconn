@@ -61,6 +61,10 @@ typedef struct _sweep_parameters
 	float v2;
 } sweep_parameters;
 
+//==== variables for reading from files ===
+std::vector<std::string> _image_list;
+std::vector<std::string>* image_list = &_image_list;
+
 //==== variables for the planner ====
 uint16_t current_active_wp_id = -1;		///< id of current waypoint
 uint16_t next_wp_id = -1;				///< id of next waypoint, after current is reached.
@@ -81,14 +85,10 @@ std::vector<mavlink_mission_item_t*>* waypoints_receive_buffer = &waypoints2;	//
 
 //==== variables for the search thread ====
 pid_t patternrec_pid = -1; ///< process id of patternrec. -1 until initialized by fork()
-
-std::vector<std::string> _image_list;
-std::vector<std::string>* image_list = &_image_list;
 mavlink_local_position_ned_t search_success_pos; ///< position of MAV when it succeeded in search
 mavlink_attitude_t search_success_att;		 ///< attitude of MAV when it succeeded in search
 mavlink_pattern_detected_t last_detected_pattern; ///< latest successful pattern detection
 float min_conf = 0;                        ///< minimum confidence for pattern to be detected successfully.
-//static GString* SEARCH_PIC = g_string_new("media/sweep_images/mona.jpg");	///< relative path of the search image
 
 //==== variables for the sweep thread ====
 mavlink_mission_item_t* next_sweep_wp = NULL;
@@ -173,6 +173,136 @@ uint8_t protocol_current_partner_compid = 0;
 uint64_t protocol_timestamp_lastaction = 0;
 uint64_t timestamp_last_send_setpoint = 0;
 uint64_t timestamp_last_handle_mission = 0;
+
+
+uint16_t load_mission_from_file(std::string waypointfile)
+{
+        std::ifstream wpfile;
+        wpfile.open(waypointfile.c_str());
+        if (!wpfile)
+        {
+            printf("Unable to open waypoint file\n");
+            return 1; // terminate with error
+        }
+        if (!wpfile.eof())
+        {
+            std::string check;
+			int ver;
+			bool good = false;
+			wpfile >> check;
+			if (!strcmp(check.c_str(),"QGC"))
+			{
+				wpfile >> check;
+				if (!strcmp(check.c_str(),"WPL"))
+				{
+					wpfile >> ver;
+
+					char c = (char)wpfile.peek();
+					if(c == '\r' || c == '\n')
+					{
+						good = true; //the structure of the first line in the file is correct: QGC WPL ###
+					}
+				}
+			}
+
+            if (!good)
+            {
+            	printf("Invalid waypoint file\n");
+            	return 1;
+            }
+            if (verbose) printf("Version: %u\n", ver);
+            switch (ver)
+            {
+            case 120:
+             {
+             	printf("Loading waypoint file...\n");
+             	while (!wpfile.eof())
+ 	            {
+ 	                mavlink_mission_item_t *wp = new mavlink_mission_item_t();
+
+ 	                uint16_t temp;
+
+ 	                wpfile >> wp->seq; //waypoint id
+ 	                wpfile >> temp; wp->current = temp;
+ 	                wpfile >> temp; wp->frame = temp;
+ 	                wpfile >> temp; wp->command = temp;
+ 	                wpfile >> wp->param1;
+ 	                wpfile >> wp->param2;
+ 	                wpfile >> wp->param3; //old "orbit"
+ 	                wpfile >> wp->param4; //old "yaw"
+ 	                wpfile >> wp->x;
+ 	                wpfile >> wp->y;
+ 	                wpfile >> wp->z;
+ 	                wpfile >> temp; wp->autocontinue = temp;
+
+ 	                char c = (char)wpfile.peek();
+ 	                if(c != '\r' && c != '\n')
+ 	                {
+ 	                    delete wp;
+ 	                    break;
+ 	                }
+
+ 	                printf("WP %3u%s: Frame: %u\tCommand: %3u\tparam1: %6.2f\tparam2: %7.2f\tparam3: %6.2f\tparam4: %7.2f\tX: %7.2f\tY: %7.2f\tZ: %7.2f\tAuto-Cont: %u\t\n", wp->seq, (wp->current?"*":" "), wp->frame, wp->command, wp->param1, wp->param2, wp->param3, wp->param4, wp->x, wp->y, wp->z, wp->autocontinue);
+ 	                waypoints->push_back(wp);
+ 	            } //end while
+               	break;
+             }
+             default:
+             {
+                 printf("Waypoint file version %u is not supported!\n",ver);
+                 return 1; // terminate with error
+             }
+
+            } //end version switch
+        } // end reading file
+        else
+        {
+            printf("Empty waypoint file!\n");
+            //return 1; // terminate with error
+        }
+        wpfile.close();
+        return 0;
+}
+
+uint16_t load_imagelist_from_file(std::string imagelistfile)
+{
+std::ifstream ilfile;
+ilfile.open(imagelistfile.c_str());
+if (!ilfile) {
+    printf("Unable to open image list file\n");
+    return 1; // terminate with error
+}
+
+if (!ilfile.eof())
+{
+    printf("Loading image list file...\n");
+    std::string image_path;
+    while (!ilfile.eof())
+    {
+    	getline(ilfile,image_path);
+    	if (image_path.size() > 0)
+    	{
+    		if(verbose) printf("%s\n", image_path.c_str());
+    		image_list->push_back(image_path);
+    	}
+    	else
+    	{
+    		break;
+    	}
+    }
+}
+else
+{
+    printf("Empty image list file!\n");
+}
+ilfile.close();
+//Test if filenames have been saved correctly
+//printf("Number of lines: %u\n", image_list->size());
+//std::string temp;
+//temp = image_list->at(1);
+//printf("Second line: %s\n", temp.c_str());
+return 0;
+}
 
 void handle_mission (uint16_t seq, uint64_t now);
 
@@ -1817,45 +1947,11 @@ int main(int argc, char* argv[])
 
     if (imagelistfile.length())
     {
-        std::ifstream ilfile;
-        ilfile.open(imagelistfile.c_str());
-        if (!ilfile) {
-            printf("Unable to open image list file\n");
-            exit(1); // terminate with error
-        }
-
-        if (!ilfile.eof())
-        {
-            printf("Loading image list file...\n");
-            std::string image_path;
-            while (!ilfile.eof())
-            {
-            	getline(ilfile,image_path);
-            	if (image_path.size() > 0)
-            	{
-            		printf("%s\n", image_path.c_str());
-            		image_list->push_back(image_path);
-            	}
-            	else
-            	{
-            		break;
-            	}
-            }
-        }
-        else
-        {
-            printf("Empty image list file!\n");
-        }
-        ilfile.close();
-        //Test if filenames have been saved correctly
-        printf("%u\n", image_list->size());
-        std::string temp;
-        temp = image_list->at(1);
-        printf("%s\n", temp.c_str());
+    	if(load_imagelist_from_file(imagelistfile))
+    		{
+    			printf("Error reading image list from file\n");
+    		}
 	}
-
-
-
 
     /**********************************
     * Run the LCM thread
@@ -1895,87 +1991,14 @@ int main(int argc, char* argv[])
     * set the new current waypoint
     **********************************/
 	g_mutex_lock(main_mutex);
+	wpp_state = PX_WPP_RUNNING;
     if (waypointfile.length())
     {
-        std::ifstream wpfile;
-        wpfile.open(waypointfile.c_str());
-        if (!wpfile) {
-            printf("Unable to open waypoint file\n");
+        if(load_mission_from_file(waypointfile))
+        {
+            printf("Error reading mission from file\n");
             exit(1); // terminate with error
         }
-
-        if (!wpfile.eof())
-        {
-            std::string check;
-            //			int ver;
-            //			bool good = false;
-            //			wpfile >> check;
-            //			if (!strcmp(check.c_str(),"QGC"))
-            //			{
-            //				wpfile >> check;
-            //				if (!strcmp(check.c_str(),"WPL"))
-            //				{
-            //					wpfile >> ver;
-            //					if (ver == 100)
-            //					{
-            //						char c = (char)wpfile.peek();
-            //						if(c == '\r' || c == '\n')
-            //						{
-            //							good = true;
-            //						}
-            //					}
-            //				}
-            //			}
-
-            printf("Loading waypoint file...\n");
-
-            getline(wpfile,check);
-
-            printf("Version line: %s\n", check.c_str());
-
-            if(!strcmp(check.c_str(),"QGC WPL 120"))
-            {
-                printf("Waypoint file version mismatch\n");
-                exit(1); // terminate with error
-            }
-
-            while (!wpfile.eof())
-            {
-                mavlink_mission_item_t *wp = new mavlink_mission_item_t();
-
-                uint16_t temp;
-
-                wpfile >> wp->seq; //waypoint id
-                wpfile >> temp; wp->current = temp;
-                wpfile >> temp; wp->frame = temp;
-                wpfile >> temp; wp->command = temp;
-                wpfile >> wp->param1;
-                wpfile >> wp->param2;
-                wpfile >> wp->param3; //old "orbit"
-                wpfile >> wp->param4; //old "yaw"
-                wpfile >> wp->x;
-                wpfile >> wp->y;
-                wpfile >> wp->z;
-                wpfile >> temp; wp->autocontinue = temp;
-
-                char c = (char)wpfile.peek();
-                if(c != '\r' && c != '\n')
-                {
-                    delete wp;
-                    break;
-                }
-
-                printf("WP %3u%s: Frame: %u\tCommand: %3u\tparam1: %6.2f\tparam2: %7.2f\tparam3: %6.2f\tparam4: %7.2f\tX: %7.2f\tY: %7.2f\tZ: %7.2f\tAuto-Cont: %u\t\n", wp->seq, (wp->current?"*":" "), wp->frame, wp->command, wp->param1, wp->param2, wp->param3, wp->param4, wp->x, wp->y, wp->z, wp->autocontinue);
-                waypoints->push_back(wp);
-            }
-        }
-        else
-        {
-            printf("Empty waypoint file!\n");
-        }
-        wpfile.close();
-
-	wpp_state = PX_WPP_RUNNING;
 
         struct timeval tv;
         gettimeofday(&tv, NULL);
@@ -2002,7 +2025,6 @@ int main(int argc, char* argv[])
     }
     g_mutex_unlock(main_mutex);
 
-    wpp_state = PX_WPP_RUNNING;
     printf("WAYPOINTPLANNER INITIALIZATION DONE, RUNNING...\n");
 
     /**********************************
