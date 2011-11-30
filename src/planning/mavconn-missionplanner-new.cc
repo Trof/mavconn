@@ -591,6 +591,7 @@ void check_if_reached_dest(bool* posReached, bool* yawReached, uint16_t next_wp_
 
 	if (dist >= 0.f && dist <= cur_dest.rad)
 	{
+		//if (debug) printf("Check dest_reach: dist = %f, rad = %f\n",dist,cur_dest.rad);
 	    *posReached = true;
 	}
 
@@ -715,27 +716,33 @@ for (i=3;i>0;i--)
 	printf("x1: %f  y1: %f\n", corner[1][0],corner[1][1]);
 	printf("x2: %f  y2: %f\n", corner[2][0],corner[2][1]);
 	printf("x3: %f  y3: %f\n", corner[3][0],corner[3][1]);
-	printf("\nlong: %f  short: %f\n", sw->long_side, sw->short_side);
+
 	printf("\nu1: %f  v1: %f \n", sw->u1,sw->v1);
 	printf("u2: %f  v2: %f \n", sw->u2,sw->v2);
 	*/
-
+	printf("\nlong: %f  short: %f\n", sw->long_side, sw->short_side);
 	return 0;
 }
 
 
 
 
+
 /*
-// FIX ME!!
 void terminate_all_threads() //this fuction should be called every time when a new waypoint list is downloaded, to end threads from the old list.
 {
 	if (verbose) printf("Kill all threads!\n");
 
 	terminate_threads = true;
+
+	// FIX ME!! For some reason g_cond_broadcast is ignored and the thread does not wake up for termination.
+
+	if (verbose) printf("Waking the search thread for termination...\n");
 	g_cond_broadcast(cond_pattern_detected); //fake condition broadcast in order to wake the search thread for termination
+	if (verbose) printf("Waking the sweep thread for termination...\n");
 	g_cond_broadcast(cond_position_received); //fake condition broadcast in order to wake the sweep thread for termination
 	terminate_threads = false;
+	if (verbose) printf("All threads killed!\n");
 }
 */
 
@@ -806,8 +813,8 @@ void* sweep_thread_func (gpointer sweep_wp)
 		next_sweep_wp = new mavlink_mission_item_t;
 		next_sweep_wp->command = MAV_CMD_NAV_WAYPOINT; // Must be declared
 		next_sweep_wp->frame = 1;
-		next_sweep_wp->param1 = 0.15; // acceptance radius may depend on sw.r, e.g. 0.2*sw.r
-		next_sweep_wp->param2 = 2; // MAV should stay 0.5s at each checkpoint within the sweep
+		next_sweep_wp->param1 = 0.5; // MAV should stay 0.5s at each checkpoint within the sweep
+		next_sweep_wp->param2 = 0.15; // acceptance radius may depend on sw.r, e.g. 0.2*sw.r
 		next_sweep_wp->param4 = 0; // Should yaw stay constant all the time?
 		next_sweep_wp->z = sw.z;
 
@@ -822,14 +829,15 @@ void* sweep_thread_func (gpointer sweep_wp)
 			if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2);
 	    	next_sweep_wp->x = sw.x0 + (sw.r + (sweep_line % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
 	    	next_sweep_wp->y = sw.y0 + (sw.r + (sweep_line % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
-	    	if (verbose) printf("Sweep: next dest (%f, %f)",next_sweep_wp->x,next_sweep_wp->y);
 	    	now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
 	    	handle_mission(current_active_wp_id,now);
 	    	yawReached = false;						///< boolean for yaw attitude reached
 	    	posReached = false;						///< boolean for position reached
 	    	while (posReached==false || yawReached==false || wpp_state != PX_WPP_RUNNING)
 	    	{
+	    		//if (verbose) printf("...sweep thread going to wait (wp: %u)\n", sweep_line*2);
 	    		g_cond_wait(cond_position_received,main_mutex);
+	    		//if (verbose) printf("...sweep thread active\n");
 				if (current_active_wp_id != sweep_wp_->seq || terminate_threads == true) //terminate thread if current waypoint changed
 				{
 					sweep_state = PX_WPP_SWEEP_IDLE;
@@ -849,14 +857,15 @@ void* sweep_thread_func (gpointer sweep_wp)
 	    	if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2+1);
 	    	next_sweep_wp->x = sw.x0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.u1 + (1+2*sweep_line)*sw.r*sw.u2;
 	    	next_sweep_wp->y = sw.y0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.v1 + (1+2*sweep_line)*sw.r*sw.v2;
-	    	if (verbose) printf("Sweep: next dest (%f, %f)",next_sweep_wp->x,next_sweep_wp->y);
 	    	now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
 	    	handle_mission(current_active_wp_id,now);
 	    	yawReached = false;						///< boolean for yaw attitude reached
 	    	posReached = false;						///< boolean for position reached
 	    	while (posReached==false || yawReached==false || wpp_state != PX_WPP_RUNNING)
 	    	{
+	    		//if (verbose) printf("...sweep thread going to wait (wp: %u)\n", sweep_line*2+1);
 	    		g_cond_wait(cond_position_received,main_mutex);
+	    		//if (verbose) printf("...sweep thread active\n");
 				if (current_active_wp_id != sweep_wp_->seq || terminate_threads == true)
 				{
 					sweep_state = PX_WPP_SWEEP_IDLE;
@@ -871,7 +880,70 @@ void* sweep_thread_func (gpointer sweep_wp)
 		    	check_if_reached_dest(&posReached, &yawReached, fake_next_wp_id);
 	    	}
 	    	sweep_line++;
+		} // end while
+
+		if (sw.short_side > 2*sweep_line*sw.r) //The last sweep line was partially covered by the previous one, but should be added for complete cover of sweep area
+		{
+
+			if (verbose) printf("Sweep: proceeding to the last sweep line %u\n", sweep_line);
+
+			// (sweep_line*2)-th chechpoint
+			if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2);
+	    	next_sweep_wp->x = sw.x0 + (sw.r + (sweep_line % 2)*sw.d)*sw.u1 + (sw.short_side - sw.r)*sw.u2;
+	    	next_sweep_wp->y = sw.y0 + (sw.r + (sweep_line % 2)*sw.d)*sw.v1 + (sw.short_side - sw.r)*sw.r*sw.v2;
+	    	now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
+	    	handle_mission(current_active_wp_id,now);
+	    	yawReached = false;						///< boolean for yaw attitude reached
+	    	posReached = false;						///< boolean for position reached
+	    	while (posReached==false || yawReached==false || wpp_state != PX_WPP_RUNNING)
+	    	{
+	    		//if (verbose) printf("...sweep thread going to wait (wp: %u)\n", sweep_line*2);
+	    		g_cond_wait(cond_position_received,main_mutex);
+	    		//if (verbose) printf("...sweep thread active\n");
+				if (current_active_wp_id != sweep_wp_->seq || terminate_threads == true) //terminate thread if current waypoint changed
+				{
+					sweep_state = PX_WPP_SWEEP_IDLE;
+					if (verbose && current_active_wp_id != sweep_wp_->seq) printf("Sweep: failed. Current waypoint changed. Thread terminated.\n");
+					if (verbose && terminate_threads == true) printf("Sweep: Thread terminated.\n");
+					g_mutex_unlock(main_mutex);
+					return NULL;
+				}
+
+		    	yawReached = false;						///< boolean for yaw attitude reached
+		    	posReached = false;						///< boolean for position reached
+		    	check_if_reached_dest(&posReached, &yawReached, fake_next_wp_id);
+	    	}
+
+	    	// (sweep_line*2 + 1)-th chechpoint
+
+	    	if (verbose) printf("Sweep: next checkpoint: %u\n", sweep_line*2+1);
+	    	next_sweep_wp->x = sw.x0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.u1 + (sw.short_side - sw.r)*sw.u2;
+	    	next_sweep_wp->y = sw.y0 + (sw.r + ((sweep_line+1) % 2)*sw.d)*sw.v1 + (sw.short_side - sw.r)*sw.v2;
+	    	now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
+	    	handle_mission(current_active_wp_id,now);
+	    	yawReached = false;						///< boolean for yaw attitude reached
+	    	posReached = false;						///< boolean for position reached
+	    	while (posReached==false || yawReached==false || wpp_state != PX_WPP_RUNNING)
+	    	{
+	    		//if (verbose) printf("...sweep thread going to wait (wp: %u)\n", sweep_line*2+1);
+	    		g_cond_wait(cond_position_received,main_mutex);
+	    		//if (verbose) printf("...sweep thread active\n");
+				if (current_active_wp_id != sweep_wp_->seq || terminate_threads == true)
+				{
+					sweep_state = PX_WPP_SWEEP_IDLE;
+					if (verbose && current_active_wp_id != sweep_wp_->seq) printf("Sweep: failed. Current waypoint changed. Thread terminated.\n");
+					if (verbose && terminate_threads == true) printf("Sweep: Thread terminated.\n");
+					g_mutex_unlock(main_mutex);
+					return NULL;
+				}
+
+		    	yawReached = false;						///< boolean for yaw attitude reached
+		    	posReached = false;						///< boolean for position reached
+		    	check_if_reached_dest(&posReached, &yawReached, fake_next_wp_id);
+	    	}
 		}
+
+
 		sweep_state = PX_WPP_SWEEP_FINISHED;
 		if (verbose) printf("Sweep: finished. Thread terminated.\n");
 	}
