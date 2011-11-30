@@ -21,3 +21,13 @@ PIXHAWK_LINK_LIBRARIES(mavconn-missionplanner-new
   lcm
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
 )
+
+PIXHAWK_EXECUTABLE(mavconn-simulator mavconn-simulator.cc)
+PIXHAWK_LINK_LIBRARIES(mavconn-simulator
+  ${CXCORE_LIBRARY}
+  ${GLIB2_LIBRARY}
+  ${GTHREAD2_LIBRARY}
+  mavconn_lcm
+  lcm
+  ${Boost_PROGRAM_OPTIONS_LIBRARY}
+)
