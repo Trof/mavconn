@@ -12,6 +12,7 @@ struct virtual_scan_message_t
     int16_t range_max;
 
     double origin[3];
+    double camera_to_world_rot[9];
 
     int32_t num_rays;
     int16_t ray_endpoints[num_rays];

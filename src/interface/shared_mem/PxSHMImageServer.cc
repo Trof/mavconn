@@ -222,12 +222,13 @@ PxSHMImageServer::writeRGBDImage(const cv::Mat& img, const cv::Mat& imgDepth,
 								 uint64_t timestamp, float roll, float pitch, float yaw,
 								 float lon, float lat, float alt,
 								 float ground_x, float ground_y, float ground_z,
-								 const cv::Mat& cameraMatrix)
+								 const cv::Mat& cameraMatrix,
+								 const cv::Rect& roi)
 {
 	writeImageWithCameraInfo(PxSHM::CAMERA_RGBD,
 							 timestamp, roll, pitch, yaw,
 							 lon, lat, alt,
-							 ground_x, ground_y, ground_z, cameraMatrix,
+							 ground_x, ground_y, ground_z, cameraMatrix, roi,
 							 img, imgDepth);
 
 	imgSeq++;
@@ -305,6 +306,7 @@ PxSHMImageServer::writeImageWithCameraInfo(PxSHM::CameraType cameraType,
 										   float lon, float lat, float alt,
 										   float ground_x, float ground_y, float ground_z,
 										   const cv::Mat& cameraMatrix,
+										   const cv::Rect& roi,
 										   const cv::Mat& img,
 							 	 	 	   const cv::Mat& img2)
 {
@@ -314,7 +316,7 @@ PxSHMImageServer::writeImageWithCameraInfo(PxSHM::CameraType cameraType,
 		return false;
 	}
 
-	uint32_t headerLength = 100;
+	uint32_t headerLength = 116;
 
 	if (cameraType == PxSHM::CAMERA_STEREO_8 ||
 		cameraType == PxSHM::CAMERA_STEREO_24 ||
@@ -368,19 +370,28 @@ PxSHMImageServer::writeImageWithCameraInfo(PxSHM::CameraType cameraType,
 		}
 	}
 
+	memcpy(&(data[mark]), &(roi.x), 4);
+	memcpy(&(data[mark+4]), &(roi.y), 4);
+	memcpy(&(data[mark+8]), &(roi.width), 4);
+	memcpy(&(data[mark+12]), &(roi.height), 4);
+
+	mark += 16;
+
 	memcpy(&(data[mark]), &(img.cols), 4);
 	memcpy(&(data[mark+4]), &(img.rows), 4);
 	memcpy(&(data[mark+8]), img.step.p, 4);
 	memcpy(&(data[mark+12]), &type, 4);
 
+	mark += 16;
+
 	memcpy(&(data[headerLength]), img.data, img.step[0] * img.rows);
 
 	if (!img2.empty())
 	{
-		memcpy(&(data[mark+16]), img2.step.p, 4);
+		memcpy(&(data[mark]), img2.step.p, 4);
 
 		type = img2.type();
-		memcpy(&(data[mark+20]), &type, 4);
+		memcpy(&(data[mark+4]), &type, 4);
 
 		memcpy(&(data[headerLength + img.step[0] * img.rows]), img2.data,
 			   img2.step[0] * img2.rows);

@@ -48,6 +48,28 @@ PxSHMImageClient::init(bool subscribeLatest,
 	this->cam1 = cam1;
 	this->cam2 = cam2;
 
+	std::string cameras = "";
+
+	if (cam1 == PxSHM::CAMERA_DOWNWARD_LEFT)
+	{
+		cameras += " #1: DOWN LEFT";
+	}
+	if (cam1 == PxSHM::CAMERA_FORWARD_LEFT)
+	{
+		cameras += " #1: FORWARD LEFT";
+	}
+	if (cam2 == PxSHM::CAMERA_DOWNWARD_RIGHT)
+	{
+		cameras += " #2: DOWN RIGHT";
+	}
+
+	if (cam2 == PxSHM::CAMERA_FORWARD_RIGHT)
+	{
+		cameras += " #2: FORWARD RIGHT";
+	}
+
+	printf("\t # INFO: Shared mem client initialized for cameras:%s\n", cameras.c_str());
+
 	data.reserve(1024 * 1024);
 
 	if (!shm.init(cam1 | cam2, PxSHM::CLIENT_TYPE, 128, 1, 1024 * 1024, 10))
@@ -249,7 +271,7 @@ PxSHMImageClient::getCameraConfig(void) const
 }
 
 bool
-PxSHMImageClient::readMonoImage(const mavlink_message_t* msg, cv::Mat& img)
+PxSHMImageClient::readMonoImage(const mavlink_message_t* msg, cv::Mat& img, bool verbose)
 {
 	if (msg->msgid != MAVLINK_MSG_ID_IMAGE_AVAILABLE)
 	{
@@ -259,6 +281,7 @@ PxSHMImageClient::readMonoImage(const mavlink_message_t* msg, cv::Mat& img)
 	
 	if (!shm.bytesWaiting())
 	{
+		if (verbose) printf("NO DATA WAITING in MONO IMAGE SHM CLIENT, RETURNING.\n");
 		return false;
 	}
 	
@@ -267,16 +290,19 @@ PxSHMImageClient::readMonoImage(const mavlink_message_t* msg, cv::Mat& img)
 		PxSHM::CameraType cameraType;
 		if (!readCameraType(cameraType))
 		{
+			if (verbose) printf("\t # ERROR SHM CLIENT: CANNOT READ CAMERA TYPEn");
 			return false;
 		}
 
-		if (cameraType != PxSHM::CAMERA_MONO_8 && cameraType != PxSHM::CAMERA_MONO_24)
-		{
-			return false;
-		}
+//		if (cameraType != PxSHM::CAMERA_MONO_8 && cameraType != PxSHM::CAMERA_MONO_24)
+//		{
+//			if (verbose) printf("\t # ERROR SHM CLIENT: WRONG IMAGE CHANNEL DEPTH, EXPECTED %d OR %d BUT GOT %d\n", PxSHM::CAMERA_MONO_8, PxSHM::CAMERA_MONO_24, cameraType);
+//			return false;
+//		}
 
 		if (!readImage(img))
 		{
+			if (verbose) printf("\t # ERROR SHM CLIENT: FAILED TO COPY FRAME FROM MEMORY\n");
 			return false;
 		}
 	}
@@ -365,7 +391,7 @@ PxSHMImageClient::readRGBDImage(cv::Mat& img, cv::Mat& imgDepth,
 								float& roll, float& pitch, float& yaw,
 								float& lon, float& lat, float& alt,
 								float& ground_x, float& ground_y, float& ground_z,
-								cv::Mat& cameraMatrix)
+								cv::Mat& cameraMatrix, cv::Rect& roi)
 {
 	if (!shm.bytesWaiting())
 	{
@@ -388,7 +414,7 @@ PxSHMImageClient::readRGBDImage(cv::Mat& img, cv::Mat& imgDepth,
 		if (!readImageWithCameraInfo(timestamp, roll, pitch, yaw,
 									 lon, lat, alt,
 									 ground_x, ground_y, ground_z,
-									 cameraMatrix, img, imgDepth))
+									 cameraMatrix, roi, img, imgDepth))
 		{
 			return false;
 		}
@@ -482,11 +508,11 @@ PxSHMImageClient::readImageWithCameraInfo(uint64_t& timestamp,
 										  float& roll, float& pitch, float& yaw,
 										  float& lon, float& lat, float& alt,
 										  float& ground_x, float& ground_y, float& ground_z,
-										  cv::Mat& cameraMatrix,
+										  cv::Mat& cameraMatrix, cv::Rect& roi,
 										  cv::Mat& img, cv::Mat& img2)
 {
 	uint32_t dataLength = shm.readDataPacket(data);
-	if (dataLength <= 108)
+	if (dataLength <= 124)
 	{
 		return false;
 	}
@@ -517,23 +543,28 @@ PxSHMImageClient::readImageWithCameraInfo(uint64_t& timestamp,
 		}
 	}
 
-	memcpy(&cols, &(data[mark]), 4);
-	memcpy(&rows, &(data[mark+4]), 4);
-	memcpy(&step, &(data[mark+8]), 4);
-	memcpy(&type, &(data[mark+12]), 4);
-	memcpy(&step2, &(data[mark+16]), 4);
-	memcpy(&type2, &(data[mark+20]), 4);
+	memcpy(&(roi.x), &(data[mark]), 4);
+	memcpy(&(roi.y), &(data[mark+4]), 4);
+	memcpy(&(roi.width), &(data[mark+8]), 4);
+	memcpy(&(roi.height), &(data[mark+12]), 4);
 
-	if (dataLength != 108 + rows * step + rows * step2)
+	memcpy(&cols, &(data[mark+16]), 4);
+	memcpy(&rows, &(data[mark+20]), 4);
+	memcpy(&step, &(data[mark+24]), 4);
+	memcpy(&type, &(data[mark+28]), 4);
+	memcpy(&step2, &(data[mark+32]), 4);
+	memcpy(&type2, &(data[mark+36]), 4);
+
+	if (dataLength != 124 + rows * step + rows * step2)
 	{
 		// data length is not consistent with image type
 		return false;
 	}
 
-	cv::Mat temp(rows, cols, type, &(data[108]), step);
+	cv::Mat temp(rows, cols, type, &(data[124]), step);
 	temp.copyTo(img);
 
-	cv::Mat temp2(rows, cols, type2, &(data[108 + rows * step]), step2);
+	cv::Mat temp2(rows, cols, type2, &(data[124 + rows * step]), step2);
 	temp2.copyTo(img2);
 
 	return true;

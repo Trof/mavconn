@@ -64,6 +64,7 @@ uint8_t mode;
 static GString* host = g_string_new("localhost");	///< host name for UDP server
 static GString* port = g_string_new("14550");		///< port for UDP server to open connection
 
+bool transmitExtended = true; ///< send extended MAVLINK messages
 bool silent; ///< silent run mode
 bool verbose; ///< verbose run mode
 bool emitHeartbeat; ///< tells the program to emit heart beats regularly
@@ -98,25 +99,59 @@ static void mavlink_handler(const lcm_recv_buf_t *rbuf, const char * channel,
 
 	// Send message over UDP
 	int link = *(static_cast<int*>(user));
+	int bytes_sent = 0;
+
 	static uint8_t buf[MAVLINK_MAX_PACKET_LEN];
-	int messageLength = mavlink_msg_to_send_buffer(buf, msg);
+	uint32_t messageLength = mavlink_msg_to_send_buffer(buf, msg);
 
-	if (verbose)
+	if (msg->msgid != MAVLINK_MSG_ID_EXTENDED_MESSAGE)
 	{
-		printf("(SYS: %d/COMP: %d/LCM->UDP) Received message with ID %u from LCM with %i payload bytes and %i total length\n",
-				msg->sysid, msg->compid, msg->msgid, msg->len, messageLength);
-		for (int i = 0; i < messageLength; i++)
+		if (verbose)
 		{
-			fprintf(stderr, "%02x ", buf[i]);
+			printf("(SYS: %d/COMP: %d/LCM->UDP) Received message with ID %u from LCM with %i payload bytes and %i total length\n",
+					msg->sysid, msg->compid, msg->msgid, msg->len, messageLength);
+			for (int i = 0; i < messageLength; i++)
+			{
+				fprintf(stderr, "%02x ", buf[i]);
+			}
+			fprintf(stderr, "\n");
 		}
-		fprintf(stderr, "\n");
+
+		// Send over UDP
+		bytes_sent = sendto(link, buf, messageLength, 0, (struct sockaddr*) &gcAddr,
+				sizeof(struct sockaddr_in));
+		//	extern int errno;
 	}
+	else if (transmitExtended)
+	{
+		static uint8_t extended_buf[MAVLINK_MAX_EXTENDED_PACKET_LEN];
 
-	// Send over UDP
-	int bytes_sent = sendto(link, buf, messageLength, 0, (struct sockaddr*) &gcAddr,
-			sizeof(struct sockaddr_in));
-	//	extern int errno;
+		uint32_t extendedMessageLength = messageLength + container->extended_payload_len;
 
+		// copy core message data
+		memcpy(extended_buf, buf, messageLength);
+		// copy extended message data
+		memcpy(extended_buf + messageLength, container->extended_payload, container->extended_payload_len);
+
+		if (verbose)
+		{
+			printf("(SYS: %d/COMP: %d/LCM->UDP) Received message with ID %u from LCM with %d payload bytes and %u total length\n",
+					msg->sysid, msg->compid, msg->msgid, msg->len + container->extended_payload_len, extendedMessageLength);
+			for (int i = 0; i < messageLength; i++)
+			{
+				fprintf(stderr, "%02x ", buf[i]);
+			}
+			fprintf(stderr, "\n");
+		}
+
+		// Send over UDP
+		bytes_sent = sendto(link, extended_buf, extendedMessageLength, 0, (struct sockaddr*) &gcAddr,
+				sizeof(struct sockaddr_in));
+	}
+	else
+	{
+		return;
+	}
 
 	if (bytes_sent < 1)
 	{
@@ -189,6 +224,7 @@ int main(int argc, char* argv[])
 			{ "compid", 'c', 0, G_OPTION_ARG_INT, &componentid, "ID of this component", NULL },
 			{ "host", 'r', 0, G_OPTION_ARG_STRING, host, "Remote host", host->str },
 			{ "port", 'p', 0, G_OPTION_ARG_STRING, port, "Remote port", port->str },
+			{ "extended", 'e', 0, G_OPTION_ARG_NONE, &transmitExtended, "Transmit extended MAVLINK messages", "true" },
 			{ "silent", 's', 0, G_OPTION_ARG_NONE, &silent, "Be silent", NULL },
 			{ "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Be verbose", NULL },
 			{ "debug", 'd', 0, G_OPTION_ARG_NONE, &debug, "Debug mode, changes behaviour", NULL },

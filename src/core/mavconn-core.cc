@@ -101,8 +101,17 @@ bool emitHeartbeat = false;			///< Generate a heartbeat with this process
 bool emitLoad = false;				///< Emit CPU load as debug message 101
 bool debug = false;					///< Enable debug functions and output
 bool cpu_performance = false;		///< Set CPU to performance mode (needs root)
+bool simulate_vision_with_gps = false;	///< Simulates vision with gps data (distorted and delayed)
 
 mavlink_heartbeat_t heartbeat;
+
+/**** SIMULATOR ****/
+mavlink_vision_position_estimate_t pos_vis_simulated;
+uint64_t last_sim = 0;
+float asctec_last_roll = -1000.f;
+float asctec_last_pitch;
+float asctec_last_yaw;
+/**** SIMULATOR ****/
 
 uint64_t currTime;
 uint64_t lastTime;
@@ -193,6 +202,54 @@ static void mavlink_handler(const lcm_recv_buf_t *rbuf, const char * channel,con
 			mavlink_message_t r_msg;
 			mavlink_msg_ping_pack(systemid, compid, &r_msg, ping.seq, msg->sysid, msg->compid, r_timestamp);
 			sendMAVLinkMessage(lcm, &r_msg);
+		}
+	}
+	break;
+	case MAVLINK_MSG_ID_ATTITUDE:
+	{
+		if (simulate_vision_with_gps)
+		{
+			if(msg->sysid == getSystemID() && msg->compid == 199)	//only listen to asctec bridge
+			{
+				mavlink_attitude_t att;
+				mavlink_msg_attitude_decode(msg, &att);
+				asctec_last_roll = att.roll;
+				asctec_last_pitch = att.pitch;
+				asctec_last_yaw = att.yaw;
+			}
+		}
+	}
+	break;
+	case MAVLINK_MSG_ID_LOCAL_POSITION_NED:
+	{
+		if (simulate_vision_with_gps)
+		{
+			if(msg->sysid == getSystemID() && msg->compid == 199 && asctec_last_roll != -1000.f)	//only listen to asctec bridge
+			{
+				mavlink_local_position_ned_t pos;
+				mavlink_msg_local_position_ned_decode(msg, &pos);
+
+				gettimeofday(&tv, NULL);
+				uint64_t currTime =  ((uint64_t)tv.tv_sec) * 1000000 + tv.tv_usec;
+
+				if (currTime - last_sim > 1000000)
+				{
+					if (last_sim > 0)
+					{
+						mavlink_message_t msg;
+						mavlink_msg_vision_position_estimate_encode(getSystemID(), 130, &msg, &pos_vis_simulated);
+						sendMAVLinkMessage(lcm, &msg);
+					}
+					pos_vis_simulated.usec = pos.time_boot_ms;	// this is meant for asctec testing, the asctec bridge sets timestamp to local time in us, so this is ok
+					pos_vis_simulated.roll = asctec_last_roll;
+					pos_vis_simulated.pitch = asctec_last_pitch;
+					pos_vis_simulated.yaw = asctec_last_yaw;
+					pos_vis_simulated.x = pos.x;
+					pos_vis_simulated.y = pos.y;
+					pos_vis_simulated.z = pos.z;
+					last_sim = currTime;
+				}
+			}
 		}
 	}
 	break;

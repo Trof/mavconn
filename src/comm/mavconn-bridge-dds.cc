@@ -319,12 +319,13 @@ rgbdLCMHandler(void)
 			float lon, lat, alt;
 			float ground_x, ground_y, ground_z;
 			cv::Mat cameraMatrix;
+			cv::Rect roi;
 
 			if (client.readRGBDImage(imgColor, imgDepth, timestamp,
 									 roll, pitch, yaw,
 									 lon, lat, alt,
 									 ground_x, ground_y, ground_z,
-									 cameraMatrix))
+									 cameraMatrix, roi))
 			{
 				struct timeval tv;
 				gettimeofday(&tv, 0);

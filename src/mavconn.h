@@ -41,6 +41,7 @@ This file is part of the MAVCONN project
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <vector>
 
 // MAVLINK message format includes
 #include <mavlink.h>
@@ -162,11 +163,56 @@ sendMAVLinkMessage(lcm_t * lcm, const mavlink_message_t* msg, MAVCONN_LINK_TYPE 
 	static mavconn_mavlink_msg_container_t container;
 	container.link_component_id = 0;
 	container.link_network_source = link_type;
+	container.extended_payload_len = 0;
+	container.extended_payload = 0;
 	memcpy(&(container.msg), msg, MAVLINK_MAX_PACKET_LEN);
 
 	// Publish the message on the LCM bus
 	mavconn_mavlink_msg_container_t_publish (lcm, MAVLINK_MAIN, &container);
 }
+
+#ifdef PROTOBUF_FOUND
+static inline void
+sendMAVLinkExtendedMessage(lcm_t * lcm, const mavlink_extended_message_t* msg, MAVCONN_LINK_TYPE link_type=MAVCONN_LINK_TYPE_LCM);
+
+static inline void
+sendMAVLinkExtendedMessage(lcm_t * lcm, const mavlink_extended_message_t* msg, MAVCONN_LINK_TYPE link_type)
+{
+	// Pack a new container
+	static mavconn_mavlink_msg_container_t container;
+	container.link_component_id = 0;
+	container.link_network_source = link_type;
+	memcpy(&(container.msg), &(msg->base_msg), MAVLINK_MAX_PACKET_LEN);
+	container.extended_payload_len = msg->extended_payload_len;
+	container.extended_payload = (int8_t*)msg->extended_payload;
+
+	// Publish the message on the LCM bus
+	mavconn_mavlink_msg_container_t_publish (lcm, MAVLINK_MAIN, &container);
+}
+
+static inline void
+sendMAVLinkExtendedMessage(lcm_t * lcm, const std::vector<mavlink_extended_message_t>& msg, MAVCONN_LINK_TYPE link_type=MAVCONN_LINK_TYPE_LCM);
+
+static inline void
+sendMAVLinkExtendedMessage(lcm_t * lcm, const std::vector<mavlink_extended_message_t>& msg, MAVCONN_LINK_TYPE link_type)
+{
+	for (size_t i = 0; i < msg.size(); ++i)
+	{
+		const mavlink_extended_message_t& fragment = msg.at(i);
+
+		// Pack a new container
+		static mavconn_mavlink_msg_container_t container;
+		container.link_component_id = 0;
+		container.link_network_source = link_type;
+		memcpy(&(container.msg), &(fragment.base_msg), MAVLINK_MAX_PACKET_LEN);
+		container.extended_payload_len = fragment.extended_payload_len;
+		container.extended_payload = (int8_t*)fragment.extended_payload;
+
+		// Publish the message on the LCM bus
+		mavconn_mavlink_msg_container_t_publish (lcm, MAVLINK_MAIN, &container);
+	}
+}
+#endif
 
 static inline void
 sendMAVLinkImageMessage(lcm_t * lcm, const mavlink_message_t* msg, MAVCONN_LINK_TYPE link_type=MAVCONN_LINK_TYPE_LCM);
@@ -183,11 +229,25 @@ sendMAVLinkImageMessage(lcm_t * lcm, const mavlink_message_t* msg, MAVCONN_LINK_
 	mavconn_mavlink_msg_container_t_publish (lcm, MAVLINK_IMAGES, &container);
 }
 
+
 static inline const mavlink_message_t*
 getMAVLinkMsgPtr(const mavconn_mavlink_msg_container_t* container)
 {
 	return (const mavlink_message_t*) &container->msg;
 }
+
+#ifdef PROTOBUF_FOUND
+static inline mavlink_extended_message_t
+getMAVLinkExtendedMsg(const mavconn_mavlink_msg_container_t* container)
+{
+	mavlink_extended_message_t msg;
+	memcpy(&msg.base_msg, &(container->msg), sizeof(mavlink_message_t));
+	msg.extended_payload_len = container->extended_payload_len;
+	memcpy(msg.extended_payload, container->extended_payload, container->extended_payload_len);
+
+	return msg;
+}
+#endif
 
 //// FIXME: Camera struct is a little large currently
 //struct Camera_t

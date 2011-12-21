@@ -88,39 +88,6 @@ imageHandler(const lcm_recv_buf_t* rbuf, const char* channel,
 			continue;
 		}
 
-		// read mono image data
-		cv::Mat img;
-		if (client.readMonoImage(msg, img))
-		{
-			struct timeval tv;
-			gettimeofday(&tv, NULL);
-			uint64_t currTime = ((uint64_t)tv.tv_sec) * 1000000 + tv.tv_usec;
-			uint64_t timestamp = client.getTimestamp(msg);
-
-			uint64_t diff = currTime - timestamp;
-
-			if (verbose)
-			{
-				fprintf(stderr, "# INFO: Time from capture to display: %llu ms for camera %llu\n", diff / 1000, client.getCameraID(msg));
-			}
-
-			// Display if switched on
-#ifndef NO_DISPLAY
-			if ((client.getCameraConfig() & PxSHM::CAMERA_FORWARD_LEFT) == PxSHM::CAMERA_FORWARD_LEFT)
-			{
-				cv::namedWindow("Left Image (Forward Camera)");
-				cv::imshow("Left Image (Forward Camera)", img);
-			}
-			else
-			{
-				cv::namedWindow("Left Image (Downward Camera)");
-				cv::imshow("Left Image (Downward Camera)", img);
-			}
-#endif
-
-			img.copyTo(imgToSave);
-		}
-
 		cv::Mat imgLeft, imgRight;
 		if (client.readStereoImage(msg, imgLeft, imgRight))
 		{
@@ -142,6 +109,42 @@ imageHandler(const lcm_recv_buf_t* rbuf, const char* channel,
 #endif
 
 			imgLeft.copyTo(imgToSave);
+		}
+		else
+		{
+			// Try with left mono image if stereo is not available
+			// read mono image data
+			cv::Mat img;
+			if (client.readMonoImage(msg, img))
+			{
+				struct timeval tv;
+				gettimeofday(&tv, NULL);
+				uint64_t currTime = ((uint64_t)tv.tv_sec) * 1000000 + tv.tv_usec;
+				uint64_t timestamp = client.getTimestamp(msg);
+
+				uint64_t diff = currTime - timestamp;
+
+				if (verbose)
+				{
+					fprintf(stderr, "# INFO: Time from capture to display: %llu ms for camera %llu\n", diff / 1000, client.getCameraID(msg));
+				}
+
+				// Display if switched on
+	#ifndef NO_DISPLAY
+				if ((client.getCameraConfig() & PxSHM::CAMERA_FORWARD_LEFT) == PxSHM::CAMERA_FORWARD_LEFT)
+				{
+					cv::namedWindow("Left Image (Forward Camera)");
+					cv::imshow("Left Image (Forward Camera)", img);
+				}
+				else
+				{
+					cv::namedWindow("Left Image (Downward Camera)");
+					cv::imshow("Left Image (Downward Camera)", img);
+				}
+	#endif
+
+				img.copyTo(imgToSave);
+			}
 		}
 
 		// read Kinect data

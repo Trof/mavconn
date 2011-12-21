@@ -269,7 +269,7 @@ public:
 			int shmid;
 			if ((shmid = shmget(m_key, size, IPC_CREAT | 0666)) < 0)
 			{
-				perror("shmget");
+				perror("\t# ERROR: shmget failed: Could not read shared memory");
 				return false;
 			}
 
@@ -277,7 +277,7 @@ public:
 			if((ptr = (char*)shmat(shmid, NULL, SHM_RDONLY)) == (char*)-1)
 				//if((r_shm = (char*)shmat(shmid, NULL, 0)) == (char*)-1)
 			{
-				perror("shmat");
+				perror("\t# ERROR: shmat failed: Could not attach shared memory");
 				return false;
 			}
 

@@ -78,7 +78,8 @@ public:
 						uint64_t timestamp, float roll, float pitch, float yaw,
 						float lon, float lat, float alt,
 						float ground_x, float ground_y, float ground_z,
-						const cv::Mat& cameraMatrix);
+						const cv::Mat& cameraMatrix,
+						const cv::Rect& roi = cv::Rect());
 
 private:
 	bool writeImage(PxSHM::CameraType cameraType, const cv::Mat& img,
@@ -90,6 +91,7 @@ private:
 								  float lon, float lat, float alt,
 								  float ground_x, float ground_y, float ground_z,
 								  const cv::Mat& cameraMatrix,
+								  const cv::Rect& roi,
 								  const cv::Mat& img,
 								  const cv::Mat& img2 = cv::Mat());
 

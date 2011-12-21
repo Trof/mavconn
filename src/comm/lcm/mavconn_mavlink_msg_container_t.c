@@ -20,10 +20,12 @@ int64_t __mavconn_mavlink_msg_container_t_hash_recursive(const __lcm_hash_ptr *p
     const __lcm_hash_ptr cp = { p, (void*)__mavconn_mavlink_msg_container_t_get_hash };
     (void) cp;
  
-    int64_t hash = 0x6811fb10927118e3LL
+    int64_t hash = 0x893144dfcd4de92fLL
          + __int8_t_hash_recursive(&cp)
          + __int8_t_hash_recursive(&cp)
          + __mavconn_mavlink_message_t_hash_recursive(&cp)
+         + __int32_t_hash_recursive(&cp)
+         + __int8_t_hash_recursive(&cp)
         ;
  
     return (hash<<1) + ((hash>>63)&1);
@@ -52,6 +54,12 @@ int __mavconn_mavlink_msg_container_t_encode_array(void *buf, int offset, int ma
         if (thislen < 0) return thislen; else pos += thislen;
  
         thislen = __mavconn_mavlink_message_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].msg), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __int32_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].extended_payload_len), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        thislen = __int8_t_encode_array(buf, offset + pos, maxlen - pos, p[element].extended_payload, p[element].extended_payload_len);
         if (thislen < 0) return thislen; else pos += thislen;
  
     }
@@ -83,6 +91,10 @@ int __mavconn_mavlink_msg_container_t_encoded_array_size(const mavconn_mavlink_m
  
         size += __mavconn_mavlink_message_t_encoded_array_size(&(p[element].msg), 1);
  
+        size += __int32_t_encoded_array_size(&(p[element].extended_payload_len), 1);
+ 
+        size += __int8_t_encoded_array_size(p[element].extended_payload, p[element].extended_payload_len);
+ 
     }
     return size;
 }
@@ -107,6 +119,13 @@ int __mavconn_mavlink_msg_container_t_decode_array(const void *buf, int offset, 
         thislen = __mavconn_mavlink_message_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].msg), 1);
         if (thislen < 0) return thislen; else pos += thislen;
  
+        thislen = __int32_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].extended_payload_len), 1);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
+        p[element].extended_payload = (int8_t*) lcm_malloc(sizeof(int8_t) * p[element].extended_payload_len);
+        thislen = __int8_t_decode_array(buf, offset + pos, maxlen - pos, p[element].extended_payload, p[element].extended_payload_len);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
     }
     return pos;
 }
@@ -121,6 +140,11 @@ int __mavconn_mavlink_msg_container_t_decode_array_cleanup(mavconn_mavlink_msg_c
         __int8_t_decode_array_cleanup(&(p[element].link_component_id), 1);
  
         __mavconn_mavlink_message_t_decode_array_cleanup(&(p[element].msg), 1);
+ 
+        __int32_t_decode_array_cleanup(&(p[element].extended_payload_len), 1);
+ 
+        __int8_t_decode_array_cleanup(p[element].extended_payload, p[element].extended_payload_len);
+        if (p[element].extended_payload) free(p[element].extended_payload);
  
     }
     return 0;
@@ -157,6 +181,11 @@ int __mavconn_mavlink_msg_container_t_clone_array(const mavconn_mavlink_msg_cont
         __int8_t_clone_array(&(p[element].link_component_id), &(q[element].link_component_id), 1);
  
         __mavconn_mavlink_message_t_clone_array(&(p[element].msg), &(q[element].msg), 1);
+ 
+        __int32_t_clone_array(&(p[element].extended_payload_len), &(q[element].extended_payload_len), 1);
+ 
+        q[element].extended_payload = (int8_t*) lcm_malloc(sizeof(int8_t) * q[element].extended_payload_len);
+        __int8_t_clone_array(p[element].extended_payload, q[element].extended_payload, p[element].extended_payload_len);
  
     }
     return 0;

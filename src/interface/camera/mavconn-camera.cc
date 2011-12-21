@@ -59,6 +59,10 @@ typedef struct _bufferIMU
 	//uint64_t delay;
 } bufferIMU_t;
 
+mavlink_attitude_t last_known_attitude;
+mavlink_local_position_ned_t last_known_control_position;
+mavlink_optical_flow_t last_known_optical_flow;
+
 const int MAGIC_MAX_BUFFER_AND_RETRY = 100;		// Size of the message buffer for LCM messages and maximum number of skipped/dropped frames before stopping when a mismatch happens
 const int MAGIC_MIN_SEQUENCE_DIFF = 150;		// *has to be > than MAGIC_MAX_BUFFER_AND_RETRY!* Minimum difference between two consecutively processed images to assume a sequence mismatch
 												// In other words: the maximum number of skippable frames
@@ -69,6 +73,7 @@ const int MAGIC_HARD_RETRY_MUTEX = 2;			// Maximum number of times a mutex is tr
 
 Glib::StaticMutex messageMutex;		//mutex controlling the access to the message buffer
 Glib::StaticMutex imageMutex;			//mutex controlling the access to the image data
+Glib::StaticMutex metaDataMutex;			//mutex controlling the access to the meta data
 Glib::StaticMutex imageGrabbedMutex;  //separate mutex for the image grabbed condition because libdc grab blocks
 
 Glib::Cond* imageGrabbedCond = 0;
@@ -81,6 +86,7 @@ bool processingDone = false;				//variable to check the validity of the processi
 namespace config = boost::program_options;
 
 bool quit = false;
+bool trigger = false;
 
 void
 signalHandler(int signal)
@@ -114,38 +120,62 @@ mavlinkHandler(const lcm_recv_buf_t* rbuf, const char* channel,
 	// Handle param messages
 	paramClient->handleMAVLinkPacket(msg);
 
-	if (msg->msgid == MAVLINK_MSG_ID_IMAGE_TRIGGERED)
+	if(trigger)
 	{
-
-		mavlink_image_triggered_t trigger;
-		mavlink_msg_image_triggered_decode(msg, &trigger);
-		bufferIMU_t data;
-		memcpy(&data.msg, &trigger, sizeof(mavlink_image_triggered_t));
-
-//			gettimeofday(&tv, NULL);
-//			uint64_t tt = ((uint64_t)tv.tv_sec) * 1000000 + tv.tv_usec;
-//			data->delay = tt - trigger.timestamp;
-//			printf("got message %u - %llu\n", trigger.seq, (long long unsigned) data->delay);
-
-		//if (verbose) printf("got message %u\n", trigger.seq);
-
-		//get exclusive access to the dataBuffer
-		messageMutex.lock();
-		//dataBuffer is now locked, so don't waste time
-		if (dataBuffer->full())
+		if (msg->msgid == MAVLINK_MSG_ID_IMAGE_TRIGGERED)
 		{
-			if (!verbose)
+
+			mavlink_image_triggered_t trigger;
+			mavlink_msg_image_triggered_decode(msg, &trigger);
+			bufferIMU_t data;
+			memcpy(&data.msg, &trigger, sizeof(mavlink_image_triggered_t));
+
+	//			gettimeofday(&tv, NULL);
+	//			uint64_t tt = ((uint64_t)tv.tv_sec) * 1000000 + tv.tv_usec;
+	//			data->delay = tt - trigger.timestamp;
+	//			printf("got message %u - %llu\n", trigger.seq, (long long unsigned) data->delay);
+
+			//if (verbose) printf("got message %u\n", trigger.seq);
+
+			//get exclusive access to the dataBuffer
+			messageMutex.lock();
+			//dataBuffer is now locked, so don't waste time
+			if (dataBuffer->full())
 			{
-				fprintf(stderr, "*** CRITICAL PROBLEM: PROCESSING TOO SLOW! MESSAGE BUFFER FULL ***\n");
+				if (!verbose)
+				{
+					fprintf(stderr, "*** CRITICAL PROBLEM: PROCESSING TOO SLOW! MESSAGE BUFFER FULL ***\n");
+				}
 			}
+			else
+			{
+				dataBuffer->push_back(data);
+			}
+			messageQueueNotEmptyCond->signal();
+			messageMutex.unlock();
+			Glib::Thread::yield();
 		}
-		else
+	}
+	else
+	{
+		if (msg->msgid == MAVLINK_MSG_ID_ATTITUDE)
 		{
-			dataBuffer->push_back(data);
+			metaDataMutex.lock();
+			mavlink_msg_attitude_decode(msg, &last_known_attitude);
+			metaDataMutex.unlock();
 		}
-		messageQueueNotEmptyCond->signal();
-		messageMutex.unlock();
-		Glib::Thread::yield();
+		else if (msg->msgid == MAVLINK_MSG_ID_LOCAL_POSITION_NED)
+		{
+			metaDataMutex.lock();
+			mavlink_msg_local_position_ned_decode(msg, &last_known_control_position);
+			metaDataMutex.unlock();
+		}
+		else if (msg->msgid == MAVLINK_MSG_ID_OPTICAL_FLOW)
+		{
+			metaDataMutex.lock();
+			mavlink_msg_optical_flow_decode(msg, &last_known_optical_flow);
+			metaDataMutex.unlock();
+		}
 	}
 }
 
@@ -214,7 +244,6 @@ int main(int argc, char* argv[])
 	bool automode;		///< Use auto brightness/gain/exposure/gamma
 	float frameRate;	///< Frame rate in Hz
 
-	bool trigger = false;
 	bool triggerslave = false;
 
 	uint64_t camSerial = 0;			///< Camera unique id, from hardware
@@ -286,23 +315,20 @@ int main(int argc, char* argv[])
 	//<-- guarded by messageMutex
 
 	mavconn_mavlink_msg_container_t_subscription_t* mavlinkSub = NULL;
-	if (trigger)
+	mavlinkSub = mavconn_mavlink_msg_container_t_subscribe(lcm, MAVLINK_MAIN, &mavlinkHandler, &dataBuffer);
+	if (!verbose)
 	{
-		mavlinkSub = mavconn_mavlink_msg_container_t_subscribe(lcm, MAVLINK_MAIN, &mavlinkHandler, &dataBuffer);
-		if (!verbose)
-		{
-			fprintf(stderr, "# INFO: Subscribed to %s LCM channel.\n", MAVLINK_MAIN);
-		}
+		fprintf(stderr, "# INFO: Subscribed to %s LCM channel.\n", MAVLINK_MAIN);
+	}
 
-		try
-		{
-			lcmThread = Glib::Thread::create(sigc::bind(sigc::ptr_fun(lcmWait), lcm), true);
-		}
-		catch (const Glib::ThreadError& e)
-		{
-			fprintf(stderr, "# ERROR: Cannot create LCM handling thread.\n");
-			exit(EXIT_FAILURE);
-		}
+	try
+	{
+		lcmThread = Glib::Thread::create(sigc::bind(sigc::ptr_fun(lcmWait), lcm), true);
+	}
+	catch (const Glib::ThreadError& e)
+	{
+		fprintf(stderr, "# ERROR: Cannot create LCM handling thread.\n");
+		exit(EXIT_FAILURE);
 	}
 
 	// Init image grabbing mutex/conditions
@@ -462,7 +488,7 @@ int main(int argc, char* argv[])
 			exit(EXIT_FAILURE);
 		}
 
-		//pxCam->setConfig(config);
+		pxCam->setConfig(config);
 
 		if (!pxCam->start())
 		{
@@ -766,6 +792,16 @@ int main(int argc, char* argv[])
 		}
 		else
 		{
+			metaDataMutex.lock();
+			image_data.roll = last_known_attitude.roll;
+			image_data.pitch = last_known_attitude.pitch;
+			image_data.yaw = last_known_attitude.yaw;
+			image_data.lon = last_known_control_position.x;
+			image_data.lat = last_known_control_position.y;
+			image_data.alt = last_known_control_position.z;
+			image_data.ground_z = last_known_optical_flow.ground_distance;
+			metaDataMutex.unlock();
+
 			if (useStereo)
 			{
 				if (!pxStereoCam->grabFrame(frame, frameRight, skippedFrames, sequenceNum))

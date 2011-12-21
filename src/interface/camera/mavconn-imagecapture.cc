@@ -56,6 +56,7 @@ bool silent, verbose, stereo_front;
 
 #define CAPTURE_DIR			"dataset_capture/"
 #define IMAGE_CAPTURE_FILE	"imagedata.txt"
+#define PLAIN_CAPTURE_FILE	"imagedata_extended.txt"
 
 using namespace std;
 
@@ -63,6 +64,7 @@ string captureDir;
 string captureDirLeft;
 string captureDirRight;
 ofstream imageDataFile;
+ofstream plainLogFile;
 ofstream mavlinkFile;
 
 cv::Mat img_left( 480, 640, CV_8UC1 );
@@ -80,7 +82,16 @@ bool image_grabbed = false;
 
 //image information to store
 uint64_t timestamp;
-float roll, pitch, yaw, lat, lon, alt, local_z, gx, gy, gz;
+double roll, pitch, yaw, lat, lon, alt, pres_alt, ground_dist, vdop, hdop, satcount, local_x, local_y, local_z, vx, vy, vz, gx, gy, gz, gvx, gvy, gvz;
+
+bool gotFirstImage = false;
+bool imageMetaContainsGPS = false;
+bool imageMetaContainsAttitude = false;
+bool imageMetaContainsGroundTruth = false;
+bool imageMetaContainsLocalPosition = false;
+bool imageMetaContainsLocalSpeed = false;
+bool imageMetaContainsPressureAltitude = false;
+bool imageMetaContainsGroundDistance = false;
 
 static void image_writer (void)
 {
@@ -108,7 +119,12 @@ static void image_writer (void)
 			cv::imwrite((captureDirLeft + fileName).c_str(), img_left);
 		}
 
-		imageDataFile << timestamp << ", " << roll << ", " << pitch << ", " << yaw << ", " << lat << ", " << lon << ", " << alt << ", " << local_z << ", " << gx << ", " << gy << ", " << gz << endl;
+		imageDataFile.precision(32);
+		imageDataFile << timestamp << ", " << roll << ", " << pitch << ", " << yaw << ", " << lat << ", " << lon << ", " << alt << ", " << ground_dist << ", " << gx << ", " << gy << ", " << gz << endl;
+		plainLogFile.precision(32);
+		plainLogFile << timestamp << ", " << roll << ", " << pitch << ", " << yaw << ", " << lat << ", " << lon << ", " << alt << ", " << pres_alt << ", " << ground_dist << ", " << vdop << ", " << hdop << ", " << satcount << ", " << local_x << ", " << local_y << ", " << local_z << ", " << vx << ", " << vy << ", " << vz << ", " << gx << ", " << gy << ", " << gz << ", " << gvx << ", " << gvy << ", " << gvz << endl;
+
+		//fprintf(plainLogFile, "%llu, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f, %15.36f", timestamp, roll, pitch, yaw, lat, lon, alt, pres_alt, ground_dist, vdop, hdop, satcount, local_x, local_y, local_z, vx, vy, vz, gx, gy, gz, gvx, gvy, gvz);
 
 		++imgNum;
 		image_grabbed = false;
@@ -148,10 +164,46 @@ static void image_handler (const lcm_recv_buf_t *rbuf, const char * channel, con
 
 			//cache the meta data
 			timestamp = client->getTimestamp(msg);
-			client->getRollPitchYaw(msg, roll, pitch, yaw);
-			client->getLocalHeight(msg, local_z);
-			client->getGPS(msg, lat, lon, alt);
-			client->getGroundTruth(msg, gx, gy, gz);
+			
+			float camroll, campitch, camyaw, camlat, camlon, camalt, camground_dist, camgx, camgy, camgz;			
+			client->getRollPitchYaw(msg, camroll, campitch, camyaw);
+			client->getLocalHeight(msg, camground_dist);
+			client->getGPS(msg, camlat, camlon, camalt);
+			client->getGroundTruth(msg, camgx, camgy, camgz);
+			
+			// FIXME should be parametrized differently,
+			// add a client->isGPSKnown() function call
+			if (camlat != 0.0 || camlon != 0.0 || camalt != 0.0) 
+			{
+				lat = camlat;
+				lon = camlon;
+				alt = camalt;
+				imageMetaContainsGPS = true;
+			}
+			
+			if (camroll != 0.0 || campitch != 0.0 || camyaw != 0.0)
+			{
+				imageMetaContainsAttitude = true;
+				roll = camroll;
+				pitch = campitch;
+				yaw = camyaw;
+			}
+			
+			if (camgx != 0.0 || camgy != 0.0 || camgz != 0.0)
+			{
+				imageMetaContainsGroundTruth = true;
+				gx = camgx;
+				gy = camgy;
+				gz = camgz;
+			}
+			
+			if (camground_dist != 0.0)
+			{
+				imageMetaContainsGroundDistance = true;
+				ground_dist = camground_dist;
+			}
+			
+			gotFirstImage = true;
 
 			//signal to image_writer thread that a new image can be stored
 			image_grabbed = true;
@@ -201,14 +253,14 @@ void prepareCaptureFile( ofstream& file, const string& dir, const string& filena
 {
 	cout << "Writing " << type << " capture data into " << dir << filename << endl;
 	file.open((dir + filename).c_str(), ios::out);
-	file << "Data Capture for stereo head on Pixhawk helicopter." << endl;
+	file << "# Data Capture for stereo head on Pixhawk helicopter." << endl;
 	char dayBuf[20], timeBuf[20];
 	strftime( dayBuf, 20, "%Y-%m-%d\0", timeinfo );
 	strftime( timeBuf, 20, "%H:%M\0", timeinfo );
-	file << "Recording date: " << dayBuf << ", " << timeBuf << endl;
+	file << "# Recording date: " << dayBuf << ", " << timeBuf << endl;
 	file << "##########" << endl;
-	file << "Structure:" << endl;
-	file << structure << endl;
+	file << "# Structure:" << endl;
+	file << "# " << structure << endl;
 	file << "##########" << endl << endl;
 }
 
@@ -248,6 +300,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
 					captureDirLeft = captureDir + std::string("left/");
 					captureDirRight = captureDir + std::string("right/");
 					prepareCaptureFile(imageDataFile, captureDir, IMAGE_CAPTURE_FILE, "imagenumber, timestamp, roll, pitch, yaw, lat, lon, alt, local_z, ground truth X, ground truth Y, ground truth Z", "IMAGE", timeinfo);
+					prepareCaptureFile(plainLogFile, captureDir, PLAIN_CAPTURE_FILE, "imagenumber, timestamp, roll, pitch, yaw, lat, lon, alt, pressure_alt, ground_distance, vdop, hdop, local_x, local_y, local_z, speedx, speedy, speedz, ground truth X, ground truth Y, ground truth Z, ground truth speed X, ground truth speed Y, ground truth speed Z", "IMAGE", timeinfo);
 
 					char dateBuf[80];
 					strftime( dateBuf, 80, "%Y%m%d_%H%M%S\0", timeinfo );
@@ -279,36 +332,55 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
 
 					imageDataFile << endl << "### EOF" << endl;
 					imageDataFile.close();
+					plainLogFile << endl << "### EOF" << endl;
+					plainLogFile.close();
 					mavlinkFile.close();
 
 					mavlink_message_t msg;
 					mavlink_statustext_t statustext;
-					sprintf((char*)&statustext.text, "px_imagecapture: STOPPING RECORDING");
+					sprintf((char*)&statustext.text, "MAVCONN: imagecapture: STOPPED RECORDING");
 					mavlink_msg_statustext_encode(sysid, compid, &msg, &statustext);
 					sendMAVLinkMessage(lcmMavlink, &msg);
 					recordData = false;
 					bPause = false;
 				}
 			}
-
-//		case MAV_ACTION_REC_PAUSE:
-//		{
-//			// pause recording data
-//			mavlink_message_t msg;
-//			mavlink_statustext_t statustext;
-//			if (!bPause && recordData)
-//			{
-//				bPause = true;
-//				sprintf((char*) &statustext.text, "px_imagecapture: PAUSE RECORDING");
-//
-//				mavlink_msg_statustext_encode(sysid, compid, &msg, &statustext);
-//				sendMAVLinkMessage(lcmMavlink, &msg);
-//			}
-//			break;
-//		}
 		}
 	}
 	break;
+		case MAVLINK_MSG_ID_GPS_RAW_INT:
+		{
+			mavlink_gps_raw_int_t gps;
+			mavlink_msg_gps_raw_int_decode(msg, &gps);
+			if (!imageMetaContainsGPS)
+			{
+				lat = gps.lat/(double)1E7;
+				lon = gps.lon/(double)1E7;
+				alt = gps.alt/(double)1E3;
+				hdop = gps.eph/(double)1E3;
+				vdop = gps.epv/(double)1E3;
+				satcount = gps.satellites_visible;
+			}
+		}
+			break;
+		case MAVLINK_MSG_ID_LOCAL_POSITION_NED:
+		{
+			mavlink_local_position_ned_t pos;
+			mavlink_msg_local_position_ned_decode(msg, &pos);
+			if (!imageMetaContainsLocalPosition)
+			{
+				local_x = pos.x;
+				local_y = pos.y;
+				local_z = pos.z;
+			}
+			if (!imageMetaContainsLocalSpeed)
+			{
+				vx = pos.vx;
+				vy = pos.vy;
+				vz = pos.vz;
+			}
+		}
+			break;
 
 	default:
 		break;

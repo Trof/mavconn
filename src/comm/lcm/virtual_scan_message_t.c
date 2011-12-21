@@ -20,7 +20,7 @@ int64_t __virtual_scan_message_t_hash_recursive(const __lcm_hash_ptr *p)
     const __lcm_hash_ptr cp = { p, (void*)__virtual_scan_message_t_get_hash };
     (void) cp;
  
-    int64_t hash = 0x9f0bc7047f6ca9c7LL
+    int64_t hash = 0xb472eae86e841e78LL
          + __int64_t_hash_recursive(&cp)
          + __float_hash_recursive(&cp)
          + __float_hash_recursive(&cp)
@@ -29,6 +29,7 @@ int64_t __virtual_scan_message_t_hash_recursive(const __lcm_hash_ptr *p)
          + __float_hash_recursive(&cp)
          + __int16_t_hash_recursive(&cp)
          + __int16_t_hash_recursive(&cp)
+         + __double_hash_recursive(&cp)
          + __double_hash_recursive(&cp)
          + __int32_t_hash_recursive(&cp)
          + __int16_t_hash_recursive(&cp)
@@ -80,6 +81,9 @@ int __virtual_scan_message_t_encode_array(void *buf, int offset, int maxlen, con
         thislen = __double_encode_array(buf, offset + pos, maxlen - pos, p[element].origin, 3);
         if (thislen < 0) return thislen; else pos += thislen;
  
+        thislen = __double_encode_array(buf, offset + pos, maxlen - pos, p[element].camera_to_world_rot, 9);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
         thislen = __int32_t_encode_array(buf, offset + pos, maxlen - pos, &(p[element].num_rays), 1);
         if (thislen < 0) return thislen; else pos += thislen;
  
@@ -127,6 +131,8 @@ int __virtual_scan_message_t_encoded_array_size(const virtual_scan_message_t *p,
  
         size += __double_encoded_array_size(p[element].origin, 3);
  
+        size += __double_encoded_array_size(p[element].camera_to_world_rot, 9);
+ 
         size += __int32_t_encoded_array_size(&(p[element].num_rays), 1);
  
         size += __int16_t_encoded_array_size(p[element].ray_endpoints, p[element].num_rays);
@@ -173,6 +179,9 @@ int __virtual_scan_message_t_decode_array(const void *buf, int offset, int maxle
         thislen = __double_decode_array(buf, offset + pos, maxlen - pos, p[element].origin, 3);
         if (thislen < 0) return thislen; else pos += thislen;
  
+        thislen = __double_decode_array(buf, offset + pos, maxlen - pos, p[element].camera_to_world_rot, 9);
+        if (thislen < 0) return thislen; else pos += thislen;
+ 
         thislen = __int32_t_decode_array(buf, offset + pos, maxlen - pos, &(p[element].num_rays), 1);
         if (thislen < 0) return thislen; else pos += thislen;
  
@@ -206,6 +215,8 @@ int __virtual_scan_message_t_decode_array_cleanup(virtual_scan_message_t *p, int
         __int16_t_decode_array_cleanup(&(p[element].range_max), 1);
  
         __double_decode_array_cleanup(p[element].origin, 3);
+ 
+        __double_decode_array_cleanup(p[element].camera_to_world_rot, 9);
  
         __int32_t_decode_array_cleanup(&(p[element].num_rays), 1);
  
@@ -259,6 +270,8 @@ int __virtual_scan_message_t_clone_array(const virtual_scan_message_t *p, virtua
         __int16_t_clone_array(&(p[element].range_max), &(q[element].range_max), 1);
  
         __double_clone_array(p[element].origin, q[element].origin, 3);
+ 
+        __double_clone_array(p[element].camera_to_world_rot, q[element].camera_to_world_rot, 9);
  
         __int32_t_clone_array(&(p[element].num_rays), &(q[element].num_rays), 1);
  
@@ -337,6 +350,12 @@ virtual_scan_message_t_subscription_t* virtual_scan_message_t_subscribe (lcm_t *
         return NULL;
     }
     return n;
+}
+
+int virtual_scan_message_t_subscription_set_queue_capacity (virtual_scan_message_t_subscription_t* subs, 
+                              int num_messages)
+{
+    return lcm_subscription_set_queue_capacity (subs->lc_h, num_messages);
 }
 
 int virtual_scan_message_t_unsubscribe(lcm_t *lcm, virtual_scan_message_t_subscription_t* hid)

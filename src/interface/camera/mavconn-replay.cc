@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
 
 		camid_left = idleft;
 		camid_right = idright;
-		uint64_t startTimestamp = strtoul(fromTimestampString.c_str(), NULL, 0);
+		uint64_t startTimestamp = strtoull(fromTimestampString.c_str(), NULL, 0);
 
 	mavlinkLog.open(logfile.c_str(), std::ios::binary | std::ios::in);
 	if (!mavlinkLog)
@@ -183,7 +183,7 @@ int main(int argc, char* argv[])
 				if (extension == ".bmp")
 				{
 					filename = bfs::basename(*file);
-					uint64_t timestamp = strtoul(filename.c_str(), NULL, 10);
+					uint64_t timestamp = strtoull(filename.c_str(), NULL, 10);
 					image_type val(timestamp, file->path().string());
 					images_left.insert(val);
 					if (verbose) printf("found %s\n", file->path().string().c_str());
@@ -217,7 +217,7 @@ int main(int argc, char* argv[])
 					if (extension == ".bmp")
 					{
 						filename = bfs::basename(*file);
-						uint64_t timestamp = strtoul(filename.c_str(), NULL, 10);
+						uint64_t timestamp = strtoull(filename.c_str(), NULL, 10);
 						image_type val(timestamp, file->path().string());
 						images_right.insert(val);
 						if (verbose) printf("found %s\n", file->path().string().c_str());
@@ -318,17 +318,30 @@ int main(int argc, char* argv[])
 				}
 
 				it = images_left.find(itrg.timestamp);
-				if (it != images_left.end())
+				if (it == images_left.end())
 				{
+					// Image not found
+					if (verbose) printf("Have triggering message, but missing LEFT frame for timestamp %llu!\n", itrg.timestamp);
+				}
+				else
+				{
+					// Image found
 					if (verbose) printf("[%llu] loading left image %s\n", (long long unsigned) camid_left, it->second.c_str());
 					image_left = cvLoadImage(it->second.c_str(), false);
 					il = true;
 				}
+
 				if (do_stereo)
 				{
 					it = images_right.find(itrg.timestamp);
-					if (it != images_right.end())
+					if (it == images_right.end())
 					{
+						// Image not found
+						if (verbose) printf("Have triggering message and stereo ON, but missing RIGHT frame for timestamp %llu!\n", itrg.timestamp);
+					}
+					else
+					{
+						// Image found
 						if (verbose) printf("[%llu] loading right image %s\n", (long long unsigned) camid_right, it->second.c_str());
 						image_right = cvLoadImage(it->second.c_str(), false);
 						ir = true;
@@ -346,10 +359,6 @@ int main(int argc, char* argv[])
 					{
 						cam.writeMonoImage(image_left, camid_left, itrg.timestamp, itrg, 0);
 					}
-				}
-				else
-				{
-					printf("ERROR:\tLeft image not found!\n");
 				}
 			}
 		}

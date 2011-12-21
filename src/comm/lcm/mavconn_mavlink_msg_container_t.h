@@ -23,6 +23,8 @@ struct _mavconn_mavlink_msg_container_t
     int8_t     link_network_source;
     int8_t     link_component_id;
     mavconn_mavlink_message_t msg;
+    int32_t    extended_payload_len;
+    int8_t     *extended_payload;
 };
  
 mavconn_mavlink_msg_container_t   *mavconn_mavlink_msg_container_t_copy(const mavconn_mavlink_msg_container_t *p);
