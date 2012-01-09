@@ -1079,6 +1079,7 @@ void handle_mission (uint16_t seq, uint64_t now)
 	    	takeoff_wp->command = MAV_CMD_NAV_WAYPOINT;
 	    	takeoff_wp->param1 = 5.0;	// Per definition, takeoff includes a 5.0 sec delay after reaching desired height.
 	    	takeoff_wp->param2 = 0.15;
+	    	//takeoff_wp->param4 = last_known_att.yaw; // Setting the desired yaw to current yaw for take-off -> care windup!!
 	    	set_destination(takeoff_wp);
 
 	    	bool yawReached = false;						///< boolean for yaw attitude reached
