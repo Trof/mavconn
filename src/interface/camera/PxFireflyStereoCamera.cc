@@ -24,18 +24,14 @@ PxFireflyStereoCamera::init(void)
 		return false;
 	}
 
-	fprintf(stderr, "# INFO: Sync Cable can be used, setting up camera 1 sending strobe and camera 2 as slave listening on GPIO_0 for external trigger\n");
-
-	fprintf(stderr, "# Activating strobe on GPIO_2\n");
-	if (!cameraLeft->setStrobe(2))
-	{
-		destroy();
-		return false;
-	}
-	else
-	{
-		fprintf(stderr, "# INFO: No external trigger, cameras will be synchronized as good as possible, no guarantee though...\n");
-	}
+//	fprintf(stderr, "# INFO: Setting up left camera sending strobe\n");
+//
+//	fprintf(stderr, "# Activating strobe on GPIO_2\n");
+//	if (!cameraLeft->setStrobe(2))
+//	{
+//		destroy();
+//		return false;
+//	}
 
 	return true;
 }
@@ -54,6 +50,10 @@ PxFireflyStereoCamera::setConfig(const PxCameraConfig& config)
 	{
 		return false;
 	}
+//	//the right camera has always to listen to trigger (we wan't to force the sync cable)
+//	PxCameraConfig right_config(config);
+//	right_config.setExternalTrigger(true);
+
 	if (!cameraRight->setConfig(config))
 	{
 		return false;

@@ -292,6 +292,14 @@ PxFireflyCamera::destroy(void)
 bool
 PxFireflyCamera::setConfig(const PxCameraConfig& config)
 {
+	if (!setExposureTime(config.getExposureTime()))
+	{
+		return false;
+	}
+	if (!setGain(config.getGain()))
+	{
+		return false;
+	}
 	if (!setMode(config.getMode()))
 	{
 		return false;
@@ -306,14 +314,6 @@ PxFireflyCamera::setConfig(const PxCameraConfig& config)
 		{
 			return false;
 		}
-	}
-	if (!setExposureTime(config.getExposureTime()))
-	{
-		return false;
-	}
-	if (!setGain(config.getGain()))
-	{
-		return false;
 	}
 	if (!setGamma(config.getGamma()))
 	{

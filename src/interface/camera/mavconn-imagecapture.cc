@@ -54,6 +54,11 @@ int sysid = getSystemID();
 int compid = 30;
 bool silent, verbose, stereo_front;
 
+int imuid = 200; ///< Component ID to read attitude from
+float backupRoll;
+float backupPitch;
+float backupYaw;
+
 #define CAPTURE_DIR			"dataset_capture/"
 #define IMAGE_CAPTURE_FILE	"imagedata.txt"
 #define PLAIN_CAPTURE_FILE	"imagedata_extended.txt"
@@ -165,8 +170,19 @@ static void image_handler (const lcm_recv_buf_t *rbuf, const char * channel, con
 			//cache the meta data
 			timestamp = client->getTimestamp(msg);
 			
-			float camroll, campitch, camyaw, camlat, camlon, camalt, camground_dist, camgx, camgy, camgz;			
-			client->getRollPitchYaw(msg, camroll, campitch, camyaw);
+			float camroll, campitch, camyaw, camlat, camlon, camalt, camground_dist, camgx, camgy, camgz;
+			if (imuid != 200)
+			{
+				camroll = backupRoll;
+				campitch = backupPitch;
+				camyaw = backupYaw;
+				printf("ALT IMU: %f, %f, %f\n", camroll, campitch, camyaw);
+			}
+			else
+			{
+				client->getRollPitchYaw(msg, camroll, campitch, camyaw);
+			}
+			
 			client->getLocalHeight(msg, camground_dist);
 			client->getGPS(msg, camlat, camlon, camalt);
 			client->getGroundTruth(msg, camgx, camgy, camgz);
@@ -175,9 +191,9 @@ static void image_handler (const lcm_recv_buf_t *rbuf, const char * channel, con
 			// add a client->isGPSKnown() function call
 			if (camlat != 0.0 || camlon != 0.0 || camalt != 0.0) 
 			{
-				lat = camlat;
-				lon = camlon;
-				alt = camalt;
+//				lat = camlat;
+//				lon = camlon;
+//				alt = camalt;
 				imageMetaContainsGPS = true;
 			}
 			
@@ -352,32 +368,45 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
 		{
 			mavlink_gps_raw_int_t gps;
 			mavlink_msg_gps_raw_int_decode(msg, &gps);
-			if (!imageMetaContainsGPS)
-			{
+			//if (!imageMetaContainsGPS)
+			//{
 				lat = gps.lat/(double)1E7;
 				lon = gps.lon/(double)1E7;
 				alt = gps.alt/(double)1E3;
 				hdop = gps.eph/(double)1E3;
 				vdop = gps.epv/(double)1E3;
 				satcount = gps.satellites_visible;
-			}
+			//}
 		}
 			break;
 		case MAVLINK_MSG_ID_LOCAL_POSITION_NED:
 		{
 			mavlink_local_position_ned_t pos;
 			mavlink_msg_local_position_ned_decode(msg, &pos);
-			if (!imageMetaContainsLocalPosition)
-			{
+			//if (!imageMetaContainsLocalPosition)
+			//{
 				local_x = pos.x;
 				local_y = pos.y;
 				local_z = pos.z;
-			}
-			if (!imageMetaContainsLocalSpeed)
-			{
+			//}
+			//if (!imageMetaContainsLocalSpeed)
+			//{
 				vx = pos.vx;
 				vy = pos.vy;
 				vz = pos.vz;
+			//}
+		}
+			break;
+			
+		case MAVLINK_MSG_ID_ATTITUDE:
+		{
+			if (msg->compid == imuid)
+			{
+				mavlink_attitude_t att;
+				mavlink_msg_attitude_decode(msg, &att);
+				backupRoll = att.roll;
+				backupPitch = att.pitch;
+				backupYaw = att.yaw;
 			}
 		}
 			break;
@@ -421,6 +450,7 @@ int main(int argc, char* argv[])
 		("help", "produce help message")
 		("sysid,a", config::value<int>(&sysid)->default_value(sysid), "ID of this system, 1-255")
 		("compid,c", config::value<int>(&compid)->default_value(compid), "ID of this component")
+		("imuid,i", config::value<int>(&imuid)->default_value(imuid), "ID of paired IMU")
 		("silent,s", config::bool_switch(&silent)->default_value(false), "suppress outputs")
 		("verbose,v", config::bool_switch(&verbose)->default_value(false), "verbose output")
 		("stereo_front", config::bool_switch(&stereo_front)->default_value(false), "record front stereo")
@@ -497,6 +527,7 @@ int main(int argc, char* argv[])
 	}
 
 	printf("IMAGE client ready, waiting.\n");
+	printf("IMU: %d, SYS: %d, COMP: %d\n", imuid, sysid, compid);
 
 	mavlink_message_t msg;
 	mavlink_statustext_t statustext;

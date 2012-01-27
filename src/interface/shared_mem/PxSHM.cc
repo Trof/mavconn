@@ -43,10 +43,10 @@ This file is part of the PIXHAWK project
 SHARED MEMORY STRUCTURE:
 
 -- KEY --    --------- STATIC ---------      ---------- DATA ----------
-             OFFSET       PACKET PACKET      OFFSET       PACKET PACKET
-00 01 02 03  00 01 02 03  ...    ...         00 01 02 03  ...    ...
+             OFFSET       PACKET PACKET      WRITE_OFFSET READ_OFFSET PACKET PACKET
+00 01 02 03  00 01 02 03  ...    ...         00 01 02 03  00 01 02 03  ...    ...
 
-             i_size + 4                      d_size + 4
+             i_size + 4                      i_size + 8   i_size + 12
 
 --------   PACKET ----------
 00     01 02 03 04    05 06 ... N-1    N
@@ -119,7 +119,7 @@ PxSHM::init(int key, PxSHM::Type type, int infoMaxPacketSize, int infoQueueLengt
 
 	int shmid;
 	key_t shmkey = key;
-	if ((shmid = shmget(shmkey, i_size + d_size + 12, m)) == -1)
+	if ((shmid = shmget(shmkey, i_size + d_size + 16, m)) == -1)
 	{
 		fprintf(stderr, "# ERROR: Unable to get a shared memory segment (ERRNO #%d).\n", errno);
 #ifdef __APPLE__
@@ -152,7 +152,7 @@ PxSHM::init(int key, PxSHM::Type type, int infoMaxPacketSize, int infoQueueLengt
 		memcpy(&(mem[i_size + 8]), &num, 4);
 
 		fprintf(stderr, "# INFO: allocate %.2f MB of shared memory\n",
-				(i_size + d_size + 12) / (1024.0 * 1024.0));
+				(i_size + d_size + 16) / (1024.0 * 1024.0));
 	}
 
 	return true;
@@ -261,8 +261,10 @@ PxSHM::readDataPacket(std::vector<uint8_t>& data, uint32_t length)
 		key = shmkey;
 		return 0;
 	}
-	if (off != r_off)
+	if (bytesWaiting())
 	{
+		memcpy(&r_off, &(mem[i_size + 12]), 4);
+
 		// read packet magic ID
 		if (mem[pos(0,READ_DATA)] != __SHM_IDENTIFIER)
 		{
@@ -299,8 +301,10 @@ PxSHM::readDataPacket(std::vector<uint8_t>& data)
 		key = shmkey;
 		return 0;
 	}
-	if (off != r_off)
+	if (bytesWaiting())
 	{
+		memcpy(&r_off, &(mem[i_size + 12]), 4);
+
 		// read packet magic ID
 		if (mem[pos(0,READ_DATA)] != __SHM_IDENTIFIER)
 		{
@@ -319,7 +323,8 @@ PxSHM::readDataPacket(std::vector<uint8_t>& data)
 		// check packet crc
 		if (mem[pos(5 + payloadSizeInBytes,READ_DATA)] == crc(data))
 		{
-			r_off = (r_off + payloadSizeInBytes + 6) % d_size;
+			memcpy(&r_off, &(mem[i_size + 8]), 4);
+			//r_off = (r_off + payloadSizeInBytes + 6) % d_size;
 			return payloadSizeInBytes;
 		}
 		else
@@ -350,6 +355,11 @@ PxSHM::writeDataPacket(const uint8_t* data, uint32_t length)
 	copyToSHM(data, length, 5);
 	// write packet CRC (1 byte)
 	mem[pos(5 + length,WRITE_DATA)] = crc(data, length);
+
+	//set read offset to the current write offset
+	memcpy(&(mem[i_size + 12]), &w_off, 4);
+
+	//set write offset to the next free area
 	w_off = (w_off + length + 6) % d_size;
 
 	// update write offset
@@ -447,11 +457,11 @@ PxSHM::pos(int num, PxSHM::Mode mode) const
 	}
 	if (mode == WRITE_DATA)
 	{
-		return (((w_off + num) % d_size) + i_size + 12);
+		return (((w_off + num) % d_size) + i_size + 16);
 	}
 	if (mode == READ_DATA)
 	{
-		return (((r_off + num) % d_size) + i_size + 12);
+		return (((r_off + num) % d_size) + i_size + 16);
 	}
 
 	return 0;
@@ -465,7 +475,7 @@ PxSHM::copyToSHM(const uint8_t* data, int len, int off)
 		int part1 = d_size - w_off - off;
 		int part2 = len - part1;
 		memcpy(&(mem[pos(off,WRITE_DATA)]), data, part1);
-		memcpy(&(mem[i_size + 12]), &(data[part1]), part2);
+		memcpy(&(mem[i_size + 16]), &(data[part1]), part2);
 	}
 	else
 	{
@@ -487,7 +497,7 @@ PxSHM::copyFromSHM(uint8_t* data, int len, int off) const
 		int part1 = d_size - r_off - off;
 		int part2 = len - part1;
 		memcpy(data, &(mem[pos(off,READ_DATA)]), part1);
-		memcpy(&(data[part1]), &(mem[i_size + 12]), part2);
+		memcpy(&(data[part1]), &(mem[i_size + 16]), part2);
 	}
 	else
 	{

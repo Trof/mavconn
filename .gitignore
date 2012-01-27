@@ -3,3 +3,4 @@ release*eclipse
 build
 debug
 release
+.DS_Store

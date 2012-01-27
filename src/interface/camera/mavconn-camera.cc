@@ -464,7 +464,7 @@ int main(int argc, char* argv[])
 
 	if (useStereo)
 	{
-		fprintf(stderr, "# INFO: Opening stereo with serial #%llu and #%llu, trigger is: enabled\n", (long long unsigned) camSerial, (long long unsigned) camSerialRight);
+		fprintf(stderr, "# INFO: Opening stereo with serial #%llu and #%llu, trigger is: %s\n", (long long unsigned) camSerial, (long long unsigned) camSerialRight, (trigger) ? "enabled" : "disabled");
 		if (!pxStereoCam->init())
 		{
 			fprintf(stderr, "# ERROR: Cannot initialize stereo setup.\n");
@@ -508,6 +508,10 @@ int main(int argc, char* argv[])
 		}
 		messageMutex.unlock();
 	}
+
+	memset(&last_known_attitude, 0, sizeof(mavlink_attitude_t));
+	memset(&last_known_control_position, 0, sizeof(mavlink_local_position_ned_t));
+	memset(&last_known_optical_flow, 0, sizeof(mavlink_optical_flow_t));
 
 	uint64_t lastShutter = 0;
 //	uint64_t lastMessageDelay = 0;
@@ -799,7 +803,11 @@ int main(int argc, char* argv[])
 			image_data.lon = last_known_control_position.x;
 			image_data.lat = last_known_control_position.y;
 			image_data.alt = last_known_control_position.z;
-			image_data.ground_z = last_known_optical_flow.ground_distance;
+			image_data.local_z = last_known_optical_flow.ground_distance;
+			image_data.ground_x = 0.f;
+			image_data.ground_y = 0.f;
+			image_data.ground_z = 0.f;
+			image_data.seq = 0;
 			metaDataMutex.unlock();
 
 			if (useStereo)

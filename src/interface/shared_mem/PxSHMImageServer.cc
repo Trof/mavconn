@@ -52,7 +52,7 @@ PxSHMImageServer::init(int sysid, int compid, lcm_t* lcm,
 	imgSeq = 0;
 	
 	data.reserve(1024 * 1024);
-	return shm.init(key, PxSHM::SERVER_TYPE, 128, 1, 1024 * 1024, 10);
+	return shm.init(key, PxSHM::SERVER_TYPE, 128, 1, 1024 * 1024, 9);
 }
 
 int

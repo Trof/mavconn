@@ -72,7 +72,7 @@ PxSHMImageClient::init(bool subscribeLatest,
 
 	data.reserve(1024 * 1024);
 
-	if (!shm.init(cam1 | cam2, PxSHM::CLIENT_TYPE, 128, 1, 1024 * 1024, 10))
+	if (!shm.init(cam1 | cam2, PxSHM::CLIENT_TYPE, 128, 1, 1024 * 1024, 9))
 	{
 		return false;
 	}

@@ -43,6 +43,7 @@ public:
 
 	void setMode(Mode _mode) { mode = _mode; }
 	void setFrameRate(float fps) { frameRate = fps; }
+	void setExternalTrigger(bool trigger) { externalTrigger = trigger; }
 	void setExposureTime(uint32_t exposure) { exposureTime = exposure; }
 	void setGain(uint32_t _gain) { gain = _gain; }
 	void setGamma(uint32_t _gamma) { gamma = _gamma; }

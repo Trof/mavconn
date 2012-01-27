@@ -53,7 +53,6 @@ FUNCTION(PIXHAWK_INSTALL)
 	${CMAKE_SOURCE_DIR}/src/comm/lcm/mavconn_mavlink_msg_container_t.h
 	${CMAKE_SOURCE_DIR}/src/comm/lcm/camera_image_message_t.h
 	${CMAKE_SOURCE_DIR}/src/comm/lcm/gl_overlay_message_t.h
-	${CMAKE_SOURCE_DIR}/src/comm/lcm/obstacle_map_message_t.h
 	${CMAKE_SOURCE_DIR}/src/comm/lcm/rgbd_camera_image_message_t.h
 	${CMAKE_SOURCE_DIR}/src/comm/lcm/virtual_scan_message_t.h
   )
