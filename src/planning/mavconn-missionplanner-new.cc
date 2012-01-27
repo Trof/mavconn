@@ -392,7 +392,7 @@ void send_setpoint(void)
         mavlink_set_local_position_setpoint_t PControlSetPoint;
 
         // send new set point to local IMU
-        if (cur_dest.frame == 1)
+        if (cur_dest.frame ==  MAV_FRAME_LOCAL_NED)
         {
             PControlSetPoint.target_system = systemid;
             PControlSetPoint.target_component = MAV_COMP_ID_IMU;
@@ -812,7 +812,7 @@ void* sweep_thread_func (gpointer sweep_wp)
 		uint16_t fake_next_wp_id = sweep_wp_->seq;  // defined for the sake of "check_if_reached_dest"-function
 		next_sweep_wp = new mavlink_mission_item_t;
 		next_sweep_wp->command = MAV_CMD_NAV_WAYPOINT; // Must be declared
-		next_sweep_wp->frame = 1;
+		next_sweep_wp->frame = MAV_FRAME_LOCAL_NED;
 		next_sweep_wp->param1 = 0.5; // MAV should stay 0.5s at each checkpoint within the sweep
 		next_sweep_wp->param2 = 0.15; // acceptance radius may depend on sw.r, e.g. 0.2*sw.r
 		next_sweep_wp->param4 = 0; // Should yaw stay constant all the time?
@@ -1427,7 +1427,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            mavlink_mission_ack_t wpa;
 	            mavlink_msg_mission_ack_decode(msg, &wpa);
 
-	            if((msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && (wpa.target_system == systemid && wpa.target_component == compid))
+	            if((msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && (wpa.target_system == systemid && (wpa.target_component == compid || wpa.target_component == MAV_COMP_ID_ALL)))
 	            {
 	                protocol_timestamp_lastaction = now;
 
@@ -1449,7 +1449,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            mavlink_mission_set_current_t wpc;
 	            mavlink_msg_mission_set_current_decode(msg, &wpc);
 
-	            if(wpc.target_system == systemid && wpc.target_component == compid)
+	            if(wpc.target_system == systemid && (wpc.target_component == compid || wpc.target_component == MAV_COMP_ID_ALL))
 	            {
 	                protocol_timestamp_lastaction = now;
 
@@ -1491,7 +1491,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	        {
 	            mavlink_mission_request_list_t wprl;
 	            mavlink_msg_mission_request_list_decode(msg, &wprl);
-	            if(wprl.target_system == systemid && wprl.target_component == compid)
+	            if(wprl.target_system == systemid && (wprl.target_component == compid || wprl.target_component == MAV_COMP_ID_ALL))
 	            {
 	                protocol_timestamp_lastaction = now;
 
@@ -1525,7 +1525,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	        {
 	            mavlink_mission_request_t wpr;
 	            mavlink_msg_mission_request_decode(msg, &wpr);
-	            if(msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid && wpr.target_system == systemid && wpr.target_component == compid)
+	            if(msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid && wpr.target_system == systemid && (wpr.target_component == compid || wpr.target_component == MAV_COMP_ID_ALL))
 	            {
 	                protocol_timestamp_lastaction = now;
 
@@ -1561,7 +1561,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            else
 	            {
 	                //we we're target but already communicating with someone else
-	                if((wpr.target_system == systemid && wpr.target_component == compid) && !(msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid))
+	                if((wpr.target_system == systemid && (wpr.target_component == compid || wpr.target_component == MAV_COMP_ID_ALL)) && !(msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid))
 	                {
 	                    if (verbose) printf("Ignored MAVLINK_MSG_ID_MISSION_REQUEST from ID %u because i'm already talking to ID %u.\n", msg->sysid, protocol_current_partner_systemid);
 	                }
@@ -1573,7 +1573,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	        {
 	            mavlink_mission_count_t wpc;
 	            mavlink_msg_mission_count_decode(msg, &wpc);
-	            if(wpc.target_system == systemid && wpc.target_component == compid)
+	            if(wpc.target_system == systemid && (wpc.target_component == compid || wpc.target_component == MAV_COMP_ID_ALL))
 	            {
 	                protocol_timestamp_lastaction = now;
 
@@ -1632,7 +1632,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            mavlink_mission_item_t wp;
 	            mavlink_msg_mission_item_decode(msg, &wp);
 
-	            if((msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && (wp.target_system == systemid && wp.target_component == compid))
+	            if((msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && (wp.target_system == systemid && (wp.target_component == compid || wp.target_component == MAV_COMP_ID_ALL)))
 	            {
 	                protocol_timestamp_lastaction = now;
 	                printf("Received WP %3u%s: Frame: %u\tCommand: %3u\tparam1: %6.2f\tparam2: %7.2f\tparam3: %6.2f\tparam4: %7.2f\tX: %7.2f\tY: %7.2f\tZ: %7.2f\tAuto-Cont: %u\t\n", wp.seq, (wp.current?"*":" "), wp.frame, wp.command, wp.param1, wp.param2, wp.param3, wp.param4, wp.x, wp.y, wp.z, wp.autocontinue);
@@ -1725,11 +1725,11 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            else
 	            {
 	                //we we're target but already communicating with someone else
-	                if((wp.target_system == systemid && wp.target_component == compid) && !(msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && comm_state != PX_WPP_COMM_IDLE)
+	                if((wp.target_system == systemid && (wp.target_component == compid || wp.target_component == MAV_COMP_ID_ALL)) && !(msg->sysid == protocol_current_partner_systemid && msg->compid == protocol_current_partner_compid) && comm_state != PX_WPP_COMM_IDLE)
 	                {
 	                    if (verbose) printf("Ignored MAVLINK_MSG_ID_MISSION %u from ID %u because i'm already talking to ID %u.\n", wp.seq, msg->sysid, protocol_current_partner_systemid);
 	                }
-	                else if(wp.target_system == systemid && wp.target_component == compid)
+	                else if(wp.target_system == systemid && (wp.target_component == compid || wp.target_component == MAV_COMP_ID_ALL))
 	                {
 	                    if (verbose) printf("Ignored MAVLINK_MSG_ID_MISSION %u from ID %u because i have no idea what to do with it\n", wp.seq, msg->sysid);
 	                }
@@ -1742,7 +1742,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	            mavlink_mission_clear_all_t wpca;
 	            mavlink_msg_mission_clear_all_decode(msg, &wpca);
 
-	            if(wpca.target_system == systemid && wpca.target_component == compid && comm_state == PX_WPP_COMM_IDLE)
+	            if(wpca.target_system == systemid && (wpca.target_component == compid || wpca.target_component == MAV_COMP_ID_ALL) && comm_state == PX_WPP_COMM_IDLE)
 	            {
 	                protocol_timestamp_lastaction = now;
 
@@ -1755,7 +1755,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                //terminate_all_threads();
 	                current_active_wp_id = -1;
 	            }
-	            else if (wpca.target_system == systemid && wpca.target_component == compid && comm_state != PX_WPP_COMM_IDLE)
+	            else if (wpca.target_system == systemid && (wpca.target_component == compid || wpca.target_component == MAV_COMP_ID_ALL) && comm_state != PX_WPP_COMM_IDLE)
 	            {
 	                if (verbose) printf("Ignored MAVLINK_MSG_ID_MISSION_CLEAR_LIST from %u because i'm doing something else already (state=%i).\n", msg->sysid, comm_state);
 	            }
@@ -1766,7 +1766,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	        {
 	            if(msg->sysid == systemid)
 	            {
-	                if(cur_dest.frame == 1)
+	                if(cur_dest.frame ==  MAV_FRAME_LOCAL_NED)
 	                {
 	                    mavlink_msg_attitude_decode(msg, &last_known_att);
 	                    struct timeval tv;
@@ -1785,7 +1785,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	        {
 	            if(msg->sysid == systemid)
 	            {
-	                if(cur_dest.frame == 1)
+	                if(cur_dest.frame == MAV_FRAME_LOCAL_NED)
 	                {
 	                    mavlink_msg_local_position_ned_decode(msg, &last_known_pos);
 
@@ -1828,7 +1828,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 				mavlink_msg_command_long_decode(msg, &command);
 
 
-	            if(command.target_system == systemid && command.target_component == compid)
+	            if(command.target_system == systemid && (command.target_component == compid || command.target_component == MAV_COMP_ID_ALL))
 	            {
 	                protocol_timestamp_lastaction = now;
 
@@ -1867,30 +1867,66 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	    						break;
 	    					}
 
-	    				case CMD_HALT:
+	    				case MAV_CMD_OVERRIDE_GOTO:
 	    					{
-	    						if (verbose) printf("Received HALT command.\n");
+	    						switch ((MAV_GOTO) command.param1)
+		    					{
+		    					case MAV_GOTO_DO_HOLD:
+		    					{
+		    						if (verbose) printf("Received HOLD command.\n");
+			    					if (command.param2 == MAV_GOTO_HOLD_AT_CURRENT_POSITION)
+			    					{
+		    						set_destination(get_wp_of_current_position());
+		    						wpp_state = PX_WPP_ON_HOLD;
+		    						send_command_ack(MAV_CMD_OVERRIDE_GOTO,MAV_RESULT_ACCEPTED);
+			    					}
+			    					else
+			    					{
+			    						if (verbose) printf("Warning! param2 of MAV_CMD_OVERRIDE_GOTO command is ignored. Halting at current position.\n");
+			    						send_command_ack(MAV_CMD_OVERRIDE_GOTO,MAV_RESULT_UNSUPPORTED);
+			    					}
 
-	    						set_destination(get_wp_of_current_position());
-	    						wpp_state = PX_WPP_ON_HOLD;
-	    						send_command_ack(CMD_HALT,0);
-	    						break;
-	    					}
+		    						break;
+		    					}
 
-	    				case CMD_CONTINUE:
-	    					{
-	    						if (verbose) printf("Received CONTINUE command.\n");
-	    						wpp_state = PX_WPP_RUNNING;
-	    						handle_mission(current_active_wp_id,now);
-	    						send_command_ack(CMD_CONTINUE,0);
+		    					case MAV_GOTO_DO_CONTINUE:
+		    					{
+		    						if (verbose) printf("Received CONTINUE command.\n");
+		    						send_command_ack(MAV_CMD_OVERRIDE_GOTO,MAV_RESULT_ACCEPTED);
+		    						if (wpp_state != PX_WPP_RUNNING)
+		    						{
+	    								wpp_state = PX_WPP_RUNNING;
+	    								handle_mission(current_active_wp_id,now);
+		    						}
+		    						else //Received CONTINUE order while not on hold. Interpret as overruling "autocontinue"
+		    						{
+		    							if(waypoints->at(current_active_wp_id)->autocontinue == false && ready_to_continue == true)
+		    							{
+		    								uint16_t prev_id = current_active_wp_id;
+		    								waypoints->at(current_active_wp_id)->autocontinue = true;
+		    								handle_mission(current_active_wp_id,now);
+		    								waypoints->at(prev_id)->autocontinue = false; //changing autocontinue back to false
+		    							}
+		    						}
+
+
+		    						break;
+		    					}
+
+
+		    					default:
+		    					{
+		    						printf("Received MAV_CMD_OVERRIDE_GOTO command with invalid/unsupported parameters.\n");
+		    						send_command_ack(MAV_CMD_OVERRIDE_GOTO,MAV_RESULT_UNSUPPORTED);
+		    					}
+		    					}
 	    						break;
 	    					}
 
     					default:
     					{
-    		        		//if (debug) std::cerr << "Waypointplanner: received Command message of unknown type " << command.command << std::endl;
-    						std::cerr << "Waypointplanner: received Command message of unknown type " << command.command << std::endl;
-    		        		send_command_ack(0,3);
+    						std::cerr << "Missionplanner: received Command message of unknown type " << command.command << std::endl;
+    		        		send_command_ack(command.command,MAV_RESULT_UNSUPPORTED);
     		            	break;
     		        	}
 	    				}
@@ -1902,7 +1938,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 
 		default:
         {
-            if (debug) std::cerr << "Waypoint: received message of unknown type:" << msg->msgid << std::endl;
+            if (debug) std::cerr << "Missionplanner: received message of unknown type:" << msg->msgid << std::endl;
             break;
         }
 
@@ -1982,7 +2018,7 @@ int main(int argc, char* argv[])
 
 
     //initialize current destination as (0,0,0) local coordinates
-    cur_dest.frame = 1; ///< The coordinate system of the waypoint. see MAV_FRAME in mavlink_types.h
+    cur_dest.frame = MAV_FRAME_LOCAL_NED; ///< The coordinate system of the waypoint. see MAV_FRAME in mavlink_types.h
 	cur_dest.x = 0; //local: x position, global: longitude
 	cur_dest.y = 0; //local: y position, global: latitude
 	cur_dest.z = 0; //local: z position, global: altitude
