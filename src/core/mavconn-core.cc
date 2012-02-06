@@ -58,6 +58,12 @@ using namespace std;
 #define COMM_READY_TIMEOUT 200
 #define COMM_GCS_TIMEOUT 2000
 
+typedef struct
+{
+	lcm_t* lcm;
+	MAVConnParamClient* client;
+} thread_context_t;
+
 enum COMM_STATE
 {
 	COMM_STATE_UNINIT=0,
@@ -124,11 +130,13 @@ static void mavlink_handler(const lcm_recv_buf_t *rbuf, const char * channel,con
 {
 	if (debug) printf("Received message on channel \"%s\":\n", channel);
 
-	lcm_t* lcm = (lcm_t*)user;
+	thread_context_t* context = static_cast<thread_context_t*>(user);
+
+	lcm_t* lcm = context->lcm;
 	const mavlink_message_t* msg = getMAVLinkMsgPtr(container);
 
 	// Handle param messages
-	paramClient->handleMAVLinkPacket(msg);
+	context->client->handleMAVLinkPacket(msg);
 
 	switch(msg->msgid)
 	{
@@ -305,12 +313,16 @@ int main (int argc, char ** argv)
 		return 1;
 
 	// Initialize parameter client before subscribing (and receiving) MAVLINK messages
-//	paramClient = new PxParamClient(systemid, compid, lcm, "px_system_control.cfg", verbose);
-//	paramClient->setParamValue("SYS_ID", systemid);
-//	paramClient->readParamsFromFile("px_system_control.cfg");
+	paramClient = new MAVConnParamClient(systemid, compid, lcm, "mavconn-sysctrl.cfg", verbose);
+	//paramClient->setParamValue("SYS_ID", systemid);
+	//paramClient->readParamsFromFile("px_system_control.cfg");
+
+	thread_context_t thread_context;
+	thread_context.lcm = lcm;
+	thread_context.client = paramClient;
 
 	mavconn_mavlink_msg_container_t_subscription_t * commSub =
-			mavconn_mavlink_msg_container_t_subscribe (lcm, MAVLINK_MAIN, &mavlink_handler, lcm);
+			mavconn_mavlink_msg_container_t_subscribe (lcm, MAVLINK_MAIN, &mavlink_handler, &thread_context);
 
 	// Thread
 	GThread* lcm_thread;
