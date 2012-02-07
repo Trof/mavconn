@@ -29,6 +29,7 @@ mavconn_mavlink_msg_container_t_subscription_t* comm_sub;
 
 bool debug;             	///< boolean for debug output or behavior
 bool verbose;           	///< boolean for verbose output
+bool setpointonhold;		///< boolean for sending setpoints while in HOLD state
 std::string configFile;		///< Configuration file for parameters
 
 //=== struct for storing the current destination ===
@@ -145,20 +146,11 @@ enum PX_WAYPOINTPLANNER_SWEEP_STATES
 
 enum PX_WAYPOINT_CMD_ID
 {
-	//These are unofficial waypoint types, defined especially for PixHawk project
+	//These are unofficial waypoint types, defined specially for PixHawk project
 	MAV_CMD_DO_START_SEARCH = 237,
 	MAV_CMD_DO_FINISH_SEARCH = 238,
 	MAV_CMD_DO_SEND_MESSAGE = 239,
 	MAV_CMD_DO_SWEEP = 240
-};
-
-enum PX_CMD_MESSAGE_ID
-{
-	//These are unofficial id's of Command(#75) mavlink message
-
-	CMD_SET_AUTOCONTINUE = 50,
-	CMD_HALT = 51,
-	CMD_CONTINUE = 52
 };
 
 PX_WAYPOINTPLANNER_STATES wpp_state = PX_WPP_IDLE;
@@ -1654,7 +1646,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                    {
 	                        if (verbose) printf("Got all %u waypoints, changing state to PX_WPP_COMM_IDLE\n", protocol_current_count);
 
-	                        send_mission_ack(protocol_current_partner_systemid, protocol_current_partner_compid, 0);
+	                        send_mission_ack(protocol_current_partner_systemid, protocol_current_partner_compid, MAV_MISSION_ACCEPTED);
 
 	                        if (current_active_wp_id > waypoints_receive_buffer->size()-1)
 	                        {
@@ -1701,20 +1693,33 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                    if (comm_state == PX_WPP_COMM_IDLE)
 	                    {
 	                        //we're done receiving waypoints, answer with ack.
-	                        send_mission_ack(protocol_current_partner_systemid, protocol_current_partner_compid, 0);
+	                        send_mission_ack(protocol_current_partner_systemid, protocol_current_partner_compid, MAV_MISSION_ACCEPTED);
 	                        printf("Received MAVLINK_MSG_ID_MISSION while state=PX_WPP_COMM_IDLE, answered with WAYPOINT_ACK.\n");
 	                    }
 	                    if (verbose)
 	                    {
-	                        if (!(comm_state == PX_WPP_COMM_GETLIST || comm_state == PX_WPP_COMM_GETLIST_GETWPS)) { printf("Ignored MAVLINK_MSG_ID_MISSION %u because i'm doing something else already (state=%i).\n", wp.seq, comm_state); break; }
+	                        if (!(comm_state == PX_WPP_COMM_GETLIST || comm_state == PX_WPP_COMM_GETLIST_GETWPS))
+	                        {
+	                        	printf("Ignored MAVLINK_MSG_ID_MISSION %u because i'm doing something else already (state=%i).\n", wp.seq, comm_state);
+	                        	send_mission_ack(protocol_current_partner_systemid, protocol_current_partner_compid, MAV_MISSION_ERROR);
+	                        	break;
+	                        }
 	                        else if (comm_state == PX_WPP_COMM_GETLIST)
 	                        {
-	                            if(!(wp.seq == 0)) printf("Ignored MAVLINK_MSG_ID_MISSION because the first waypoint ID (%u) was not 0.\n", wp.seq);
+	                            if(!(wp.seq == 0))
+	                            	{
+	                            		printf("Ignored MAVLINK_MSG_ID_MISSION because the first waypoint ID (%u) was not 0.\n", wp.seq);
+	                            		send_mission_ack(protocol_current_partner_systemid, protocol_current_partner_compid, MAV_MISSION_INVALID_SEQUENCE);
+	                            	}
 	                            else printf("Ignored MAVLINK_MSG_ID_MISSION %u - FIXME: missed error description\n", wp.seq);
 	                        }
 	                        else if (comm_state == PX_WPP_COMM_GETLIST_GETWPS)
 	                        {
-	                            if (!(wp.seq == protocol_current_wp_id)) printf("Ignored MAVLINK_MSG_ID_MISSION because the waypoint ID (%u) was not the expected %u.\n", wp.seq, protocol_current_wp_id);
+	                            if (!(wp.seq == protocol_current_wp_id))
+	                            	{
+	                            		printf("Ignored MAVLINK_MSG_ID_MISSION because the waypoint ID (%u) was not the expected %u.\n", wp.seq, protocol_current_wp_id);
+	                            		send_mission_ack(protocol_current_partner_systemid, protocol_current_partner_compid, MAV_MISSION_INVALID_SEQUENCE);
+	                            	}
 	                            else if (!(wp.seq < protocol_current_count)) printf("Ignored MAVLINK_MSG_ID_MISSION because the waypoint ID (%u) was out of bounds.\n", wp.seq);
 	                            else printf("Ignored MAVLINK_MSG_ID_MISSION %u - FIXME: missed error description\n", wp.seq);
 	                        }
@@ -1836,6 +1841,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                {
 	    				switch (command.command)
 	    				{
+	    				/*
 	    				case CMD_SET_AUTOCONTINUE:
 	    					{
 	    						uint8_t wp_id = (uint8_t) command.param1;
@@ -1866,7 +1872,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 
 	    						break;
 	    					}
-
+						*/
 	    				case MAV_CMD_OVERRIDE_GOTO:
 	    					{
 	    						switch ((MAV_GOTO) command.param1)
@@ -2005,6 +2011,7 @@ int main(int argc, char* argv[])
             ("config", config::value<std::string>(&configFile)->default_value("config/parameters_missionplanner.cfg"), "Config file for system parameters")
             ("waypointfile", config::value<std::string>(&waypointfile)->default_value(""), "Config file for waypoint")
             ("imagelistfile", config::value<std::string>(&imagelistfile)->default_value(""), "List of paths of images, which are used for search")
+            ("setpointonhold", config::bool_switch(&setpointonhold)->default_value(true), "If true, MP will keep sending last known position as a setpoint while in HOLD state.")
             ;
     config::variables_map vm;
     config::store(config::parse_command_line(argc, argv, desc), vm);
@@ -2141,12 +2148,12 @@ int main(int argc, char* argv[])
     **********************************/
     while (1)//need some break condition, e.g. if LCM fails
     {
-    	g_mutex_lock(main_mutex);
-        if(current_active_wp_id != (uint16_t)-1)
+        if(current_active_wp_id != (uint16_t)-1 && (setpointonhold==true || wpp_state != PX_WPP_ON_HOLD))
         {
+        	g_mutex_lock(main_mutex);
             send_setpoint();
+            g_mutex_unlock(main_mutex);
         }
-        g_mutex_unlock(main_mutex);
         usleep(paramClient->getParamValue("SETPOINTDELAY")*1000000);
     }
 
