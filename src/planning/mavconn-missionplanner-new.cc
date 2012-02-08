@@ -29,7 +29,7 @@ mavconn_mavlink_msg_container_t_subscription_t* comm_sub;
 
 bool debug;             	///< boolean for debug output or behavior
 bool verbose;           	///< boolean for verbose output
-bool setpointonhold;		///< boolean for sending setpoints while in HOLD state
+bool nosetpointonhold;		///< boolean to stop sending setpoints while in HOLD state
 std::string configFile;		///< Configuration file for parameters
 
 //=== struct for storing the current destination ===
@@ -1425,12 +1425,29 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 
 	                if (comm_state == PX_WPP_COMM_SENDLIST || comm_state == PX_WPP_COMM_SENDLIST_SENDWPS)
 	                {
-	                    if (protocol_current_wp_id == waypoints->size()-1)
-	                    {
-	                        if (verbose) printf("Received Ack after having sent last waypoint, going to state PX_WPP_COMM_IDLE\n");
+	                	//FIXME: Different reactions on different wpa->types
+	                	switch (wpa.type)
+	                	{
+	                	case MAV_MISSION_ACCEPTED:
+		                    if (protocol_current_wp_id == waypoints->size()-1)
+		                    {
+		                        if (verbose) printf("Received Ack after having sent last waypoint, going to state PX_WPP_COMM_IDLE\n");
+		                        comm_state = PX_WPP_COMM_IDLE;
+		                        protocol_current_wp_id = 0;
+		                    }
+		                    else
+		                    {
+		                        if (verbose) printf("Missionplanner: Received Ack too early!!! Going to state PX_WPP_COMM_IDLE\n");
+		                        comm_state = PX_WPP_COMM_IDLE;
+		                        protocol_current_wp_id = 0;
+		                    }
+		                    break;
+	                	default:
+	                        printf("Missionplanner: Received Ack with an error (%u).Going to state PX_WPP_COMM_IDLE\n",wpa.type);
 	                        comm_state = PX_WPP_COMM_IDLE;
 	                        protocol_current_wp_id = 0;
-	                    }
+	                		break;
+	                	}
 	                }
 	            }
 	            break;
@@ -2011,7 +2028,7 @@ int main(int argc, char* argv[])
             ("config", config::value<std::string>(&configFile)->default_value("config/parameters_missionplanner.cfg"), "Config file for system parameters")
             ("waypointfile", config::value<std::string>(&waypointfile)->default_value(""), "Config file for waypoint")
             ("imagelistfile", config::value<std::string>(&imagelistfile)->default_value(""), "List of paths of images, which are used for search")
-            ("setpointonhold", config::bool_switch(&setpointonhold)->default_value(true), "If true, MP will keep sending last known position as a setpoint while in HOLD state.")
+            ("nosetpointonhold", config::bool_switch(&nosetpointonhold)->default_value(false), "If true, MP will stop sending last known position as a setpoint while in HOLD state.")
             ;
     config::variables_map vm;
     config::store(config::parse_command_line(argc, argv, desc), vm);
@@ -2148,7 +2165,7 @@ int main(int argc, char* argv[])
     **********************************/
     while (1)//need some break condition, e.g. if LCM fails
     {
-        if(current_active_wp_id != (uint16_t)-1 && (setpointonhold==true || wpp_state != PX_WPP_ON_HOLD))
+        if(current_active_wp_id != (uint16_t)-1 && (nosetpointonhold==false || wpp_state != PX_WPP_ON_HOLD))
         {
         	g_mutex_lock(main_mutex);
             send_setpoint();
