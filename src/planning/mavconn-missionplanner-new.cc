@@ -70,6 +70,7 @@ std::vector<std::string>* image_list = &_image_list;
 uint16_t current_active_wp_id = -1;		///< id of current waypoint
 uint16_t next_wp_id = -1;				///< id of next waypoint, after current is reached.
 bool ready_to_continue = false;			///< this marker is set "true" when all necessary conditions of the current waypoint are fulfilled and wpp is ready to proceed to the next waypoint.
+bool valid_destination_available = false;
 uint64_t timestamp_lastoutside_orbit = 0;///< timestamp when the MAV was last outside the orbit or had the wrong yaw value
 uint64_t timestamp_firstinside_orbit = 0;///< timestamp when the MAV was the first time after a waypoint change inside the orbit and had the correct yaw value
 uint64_t timestamp_delay_started = 0;	 ///< timestamp when the current delay command was initiated
@@ -380,6 +381,8 @@ void send_setpoint(void)
 *  @param seq The waypoint sequence number the MAV should fly to.
 */
 {
+	if(valid_destination_available==true)
+	{
         mavlink_message_t msg;
         mavlink_set_local_position_setpoint_t PControlSetPoint;
 
@@ -408,6 +411,11 @@ void send_setpoint(void)
         gettimeofday(&tv, NULL);
         uint64_t now = ((uint64_t)tv.tv_sec)*1000000 + tv.tv_usec;
         timestamp_last_send_setpoint = now;
+	}
+	else
+	{
+		 if (debug) printf("No new set point sent, because no valid destination available yet\n");
+	}
 }
 
 void send_mission_count(uint8_t target_systemid, uint8_t target_compid, uint16_t count)
@@ -494,6 +502,7 @@ void send_mission_reached(uint16_t seq)
 void set_destination(mavlink_mission_item_t* wp)
 {
 	// Assume MAV_CMD_NAV_WAYPOINT and set parameters
+	valid_destination_available = true;
 	cur_dest.frame = wp->frame;
 	cur_dest.x = wp->x;
 	cur_dest.y = wp->y;
@@ -1617,6 +1626,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                            waypoints->pop_back();
 	                        }
 	                        //terminate_all_threads();
+	                        valid_destination_available = false;
 	                        current_active_wp_id = -1;
 	                        break;
 
@@ -1775,6 +1785,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                    waypoints->pop_back();
 	                }
 	                //terminate_all_threads();
+	                valid_destination_available = false;
 	                current_active_wp_id = -1;
 	            }
 	            else if (wpca.target_system == systemid && (wpca.target_component == compid || wpca.target_component == MAV_COMP_ID_ALL) && comm_state != PX_WPP_COMM_IDLE)
@@ -1992,6 +2003,7 @@ static void mavlink_handler (const lcm_recv_buf_t *rbuf, const char * channel, c
 
         if(waypoints->size() == 0)
         {
+        	valid_destination_available = false;
             current_active_wp_id = -1;
         }
     }
