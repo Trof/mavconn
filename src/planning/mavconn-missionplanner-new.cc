@@ -1495,6 +1495,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                        handle_mission(current_active_wp_id,now);
 	                        send_setpoint();
 	                        timestamp_firstinside_orbit = 0;
+	                        timestamp_delay_started = 0;
 	                    }
 	                    else
 	                    {
@@ -1698,6 +1699,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                                handle_mission(current_active_wp_id,now);
 	                                send_setpoint();
 	                                timestamp_firstinside_orbit = 0;
+	                                timestamp_delay_started = 0;
 	                                break;
 	                            }
 	                        }
@@ -1706,6 +1708,7 @@ static void handle_communication (const mavlink_message_t* msg, uint64_t now)
 	                        {
 	                            current_active_wp_id = -1;
 	                            timestamp_firstinside_orbit = 0;
+	                            timestamp_delay_started = 0;
 	                        }
 
 	                        comm_state = PX_WPP_COMM_IDLE;
