@@ -144,15 +144,16 @@ enum PX_WAYPOINTPLANNER_SWEEP_STATES
 	PX_WPP_SWEEP_RUNNING,
 	PX_WPP_SWEEP_FINISHED
 };
-
+/*
 enum PX_WAYPOINT_CMD_ID
 {
 	//These are unofficial waypoint types, defined specially for PixHawk project
 	MAV_CMD_DO_START_SEARCH = 237,
 	MAV_CMD_DO_FINISH_SEARCH = 238,
 	MAV_CMD_DO_SEND_MESSAGE = 239,
-	MAV_CMD_DO_SWEEP = 240
+	//MAV_CMD_DO_SWEEP = 82
 };
+*/
 
 PX_WAYPOINTPLANNER_STATES wpp_state = PX_WPP_IDLE;
 PX_WAYPOINTPLANNER_COMMUNICATION_STATES comm_state = PX_WPP_COMM_IDLE;
@@ -1188,6 +1189,7 @@ void handle_mission (uint16_t seq, uint64_t now)
 	    {
 	    	break;
 	    }
+#ifdef MAVLINK_ENABLED_PIXHAWK
 	    case MAV_CMD_DO_START_SEARCH:
 	    {
 	    	min_conf = cur_wp->param1; // setting minimal confidence
@@ -1324,6 +1326,7 @@ void handle_mission (uint16_t seq, uint64_t now)
 			ready_to_continue = true;
 	    	break;
 	    }
+	    /*
 	    case MAV_CMD_DO_SEND_MESSAGE:
 	    {
 	    	mavlink_message_t msg;
@@ -1339,8 +1342,9 @@ void handle_mission (uint16_t seq, uint64_t now)
 	    	ready_to_continue = true;
 	    	break;
 	    }
+	    */
 
-	    case MAV_CMD_DO_SWEEP:
+	    case MAV_CMD_NAV_SWEEP:
 	    {
 	    	if (sweep_state == PX_WPP_SWEEP_IDLE)
 	    	{
@@ -1358,20 +1362,27 @@ void handle_mission (uint16_t seq, uint64_t now)
 		    	}
 		    	if (verbose) printf("Sweep thread created!\n");
 	    	}
+	    	else if (sweep_state == PX_WPP_SWEEP_RUNNING)
+	    	{
+	    		set_destination(next_sweep_wp);
+	    	}
 	    	else if (sweep_state == PX_WPP_SWEEP_FINISHED)
 	    	{
 	    		sweep_state = PX_WPP_SWEEP_IDLE;
 		    	next_wp_id = seq + 1;
 		    	ready_to_continue = true;
-		    	break;
 	    	}
-	    	else if (sweep_state == PX_WPP_SWEEP_RUNNING)
-	    	{
-	    		set_destination(next_sweep_wp);
-	    	}
+	    	break;
 	    }
-	    break;
-
+#endif
+	    default:
+	    {
+	    	printf("Unsupported MAV_CMD_ID (#%u). Removing Autocontinue. Change CURRENT manually to proceed.\n",cur_wp->command);
+	    	cur_wp->autocontinue = false;
+	    	next_wp_id = seq + 1;
+	    	ready_to_continue = true;
+	    	break;
+	    }
 	    }} //end switch, end if
 
 		if (ready_to_continue == true)
