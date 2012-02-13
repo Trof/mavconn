@@ -1292,16 +1292,7 @@ void handle_mission (uint16_t seq, uint64_t now)
 				    		next_wp_id = cur_wp->param2;
 				    		if (verbose) printf("Search failed. Proceeding to waypoint %u\n",next_wp_id);
 				    	}
-
-				    	if (cur_wp->param3 > 0)
-				    	{
-				    		search_state = PX_WPP_SEARCH_RESET;
-				    	}
-				    	else
-				    	{
-				    		search_state = PX_WPP_SEARCH_END;
-				    		g_cond_broadcast(cond_pattern_detected); //fake condition broadcast in order to wake the search thread for termination
-				    	}
+				    	search_state = PX_WPP_SEARCH_RESET;
 			    	}
 			    	else
 			    	{
